@@ -11,6 +11,7 @@ For each email, the tool creates:
 - Risk rating: Low, Medium, or High
 - Suspicious indicators
 - Benign indicators
+- Sample data safety notes
 - Phishing classification
 - Recommended analyst action
 - Suggested user response
@@ -100,6 +101,7 @@ Likely phishing
 
 - All email samples are fake and safe for portfolio use.
 - URLs must use safe sample domains such as `example.com`, `example.net`, `example.org`, or `example.invalid`.
+- Sender and reply-to addresses must use safe sample domains.
 - The tool does not connect to Microsoft Defender, Microsoft Sentinel, Exchange Online, Freshservice, or external APIs.
 - Saved reports must use the `.md` extension and stay inside the `sample-output` folder.
 - Rule-based logic is used first so the reasoning is transparent and easy to improve.
@@ -109,6 +111,7 @@ Likely phishing
 - This is not a live mailbox or Defender integration.
 - The scoring rules are intentionally simple and should not be treated as production phishing detection.
 - Header authentication values are sample fields, not parsed raw message headers.
+- Safe sample domains are a lab safety control, not a signal that an email is benign.
 - Analyst review is still required before taking containment action.
 
 ## Run Tests

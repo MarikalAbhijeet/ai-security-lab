@@ -5,9 +5,10 @@ It does not call paid APIs, external services, or AI providers.
 """
 
 import argparse
+from datetime import datetime
 import json
-import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -124,6 +125,10 @@ def validate_email(email):
         if not isinstance(email[field_name], str) or not email[field_name].strip():
             raise ValueError(f"Email field must be a non-empty string: {field_name}")
 
+    validate_sample_email_address(email["sender"], "sender")
+    validate_sample_email_address(email["reply_to"], "reply_to")
+    validate_timestamp(email["received_timestamp"])
+
     if not isinstance(email["urls"], list):
         raise ValueError("Email field must be a list: urls")
 
@@ -142,17 +147,42 @@ def validate_email(email):
             raise ValueError(f"{field_name} must be one of: {', '.join(sorted(AUTH_RESULTS))}")
 
 
+def validate_sample_email_address(email_address, field_name):
+    """Require a simple email-like value using a safe sample domain."""
+    if email_address.count("@") != 1:
+        raise ValueError(f"{field_name} must contain exactly one @ symbol.")
+
+    local_part, domain = email_address.lower().split("@")
+    if not local_part or not domain:
+        raise ValueError(f"{field_name} must include a local part and domain.")
+
+    if not domain.endswith(SAFE_SAMPLE_DOMAINS):
+        raise ValueError(f"{field_name} must use a safe sample domain.")
+
+
+def validate_timestamp(timestamp):
+    """Require a simple ISO 8601 UTC timestamp ending in Z."""
+    try:
+        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError(f"received_timestamp must use ISO 8601 format: {timestamp}") from error
+
+
 def validate_sample_url(url):
     """Require safe sample domains for portfolio data."""
-    if not url.startswith(("https://", "http://")):
+    parsed_url = urlparse(url)
+
+    if parsed_url.scheme not in {"http", "https"}:
         raise ValueError(f"URL must start with http:// or https://: {url}")
 
-    host_match = re.match(r"^https?://([^/]+)", url)
-    if not host_match:
+    host = parsed_url.hostname
+    if not host:
         raise ValueError(f"URL host could not be parsed: {url}")
 
-    host = host_match.group(1).lower()
-    if not host.endswith(SAFE_SAMPLE_DOMAINS):
+    if parsed_url.username or parsed_url.password:
+        raise ValueError(f"URL must not include username or password syntax: {url}")
+
+    if not host.lower().endswith(SAFE_SAMPLE_DOMAINS):
         raise ValueError(f"URL must use a safe sample domain: {url}")
 
 
@@ -197,6 +227,7 @@ def analyze_email(email):
     text = normalize_text(email)
     suspicious_indicators, categories = find_keyword_indicators(text)
     benign_indicators = []
+    sample_safety_notes = []
     score = 0
 
     score += len(suspicious_indicators)
@@ -218,8 +249,11 @@ def analyze_email(email):
             suspicious_indicators.append(f"Attachment has a risky file type: {email['attachment_name']}")
             categories.add("attachment")
             score += 3
+        elif "qr_phishing" in categories and attachment.endswith((".png", ".jpg", ".jpeg")):
+            suspicious_indicators.append(f"Image attachment may contain a QR phishing lure: {email['attachment_name']}")
+            score += 2
         else:
-            benign_indicators.append(f"Attachment name is present for review: {email['attachment_name']}")
+            benign_indicators.append(f"Attachment name is present and does not use a high-risk extension: {email['attachment_name']}")
 
     if email["sender"].split("@")[-1].lower() != email["reply_to"].split("@")[-1].lower():
         suspicious_indicators.append("Sender domain and reply-to domain do not match")
@@ -228,7 +262,7 @@ def analyze_email(email):
     if not email["urls"]:
         benign_indicators.append("No URLs were included in the message.")
     else:
-        benign_indicators.append("URLs use safe sample domains for this lab.")
+        sample_safety_notes.append("URLs use safe sample domains for this lab.")
 
     for keyword in BENIGN_KEYWORDS:
         if keyword in text:
@@ -252,6 +286,7 @@ def analyze_email(email):
         "classification": classification,
         "suspicious_indicators": suspicious_indicators or ["No strong suspicious indicators found."],
         "benign_indicators": benign_indicators or ["No strong benign indicators found."],
+        "sample_safety_notes": sample_safety_notes or ["No URLs were included in the message."],
         "mitre_mappings": build_mitre_mappings(categories),
         "recommended_analyst_action": analyst_action(risk_rating),
         "suggested_user_response": user_response(risk_rating),
@@ -333,6 +368,7 @@ def generate_report(email):
     analysis = analyze_email(email)
     suspicious = "\n".join(f"- {clean_markdown(item)}" for item in analysis["suspicious_indicators"])
     benign = "\n".join(f"- {clean_markdown(item)}" for item in analysis["benign_indicators"])
+    sample_safety = "\n".join(f"- {clean_markdown(item)}" for item in analysis["sample_safety_notes"])
     containment = "\n".join(f"{index}. {clean_markdown(step)}" for index, step in enumerate(analysis["containment_steps"], start=1))
     mitre = "\n".join(
         f"- Tactic: {clean_markdown(item['tactic'])}; Technique: {clean_markdown(item['technique'])}"
@@ -357,6 +393,8 @@ def generate_report(email):
         suspicious,
         "## Benign Indicators",
         benign,
+        "## Sample Data Safety Notes",
+        sample_safety,
         "## Recommended Analyst Action",
         analysis["recommended_analyst_action"],
         "## Suggested User Response",

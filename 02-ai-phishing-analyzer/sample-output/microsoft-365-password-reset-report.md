@@ -29,6 +29,10 @@ Likely phishing
 
 ## Benign Indicators
 
+- No strong benign indicators found.
+
+## Sample Data Safety Notes
+
 - URLs use safe sample domains for this lab.
 
 ## Recommended Analyst Action

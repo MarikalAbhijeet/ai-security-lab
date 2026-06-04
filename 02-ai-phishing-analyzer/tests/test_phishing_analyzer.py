@@ -41,6 +41,7 @@ class PhishingAnalyzerTests(unittest.TestCase):
 
         self.assertIn("## Risk Rating", report)
         self.assertIn("## Suspicious Indicators", report)
+        self.assertIn("## Sample Data Safety Notes", report)
         self.assertIn("## MITRE ATT&CK Mapping", report)
         self.assertIn("## Freshservice-Style Ticket Note", report)
 
@@ -52,6 +53,61 @@ class PhishingAnalyzerTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             phishing_analyzer.validate_email(email)
+
+    def test_rejects_malformed_url(self):
+        email = phishing_analyzer.load_email(
+            PROJECT_ROOT / "sample-inputs" / "benign-internal-it-notification.json"
+        )
+        email["urls"] = ["https://internal-it.example.com@example.net/login"]
+
+        with self.assertRaises(ValueError):
+            phishing_analyzer.validate_email(email)
+
+    def test_rejects_malformed_sender(self):
+        email = phishing_analyzer.load_email(
+            PROJECT_ROOT / "sample-inputs" / "benign-internal-it-notification.json"
+        )
+        email["sender"] = "not-an-email"
+
+        with self.assertRaises(ValueError):
+            phishing_analyzer.validate_email(email)
+
+    def test_rejects_real_sender_domain(self):
+        email = phishing_analyzer.load_email(
+            PROJECT_ROOT / "sample-inputs" / "benign-internal-it-notification.json"
+        )
+        email["sender"] = "service-desk@real-domain.test"
+
+        with self.assertRaises(ValueError):
+            phishing_analyzer.validate_email(email)
+
+    def test_rejects_malformed_timestamp(self):
+        email = phishing_analyzer.load_email(
+            PROJECT_ROOT / "sample-inputs" / "benign-internal-it-notification.json"
+        )
+        email["received_timestamp"] = "June 3rd at lunch"
+
+        with self.assertRaises(ValueError):
+            phishing_analyzer.validate_email(email)
+
+    def test_rejects_non_list_urls(self):
+        email = phishing_analyzer.load_email(
+            PROJECT_ROOT / "sample-inputs" / "benign-internal-it-notification.json"
+        )
+        email["urls"] = "https://internal-it.example.com/status"
+
+        with self.assertRaises(ValueError):
+            phishing_analyzer.validate_email(email)
+
+    def test_qr_image_attachment_is_suspicious_when_qr_lure_present(self):
+        email = phishing_analyzer.load_email(PROJECT_ROOT / "sample-inputs" / "qr-code-phishing.json")
+
+        analysis = phishing_analyzer.analyze_email(email)
+
+        self.assertIn(
+            "Image attachment may contain a QR phishing lure: mfa_qr_code.png",
+            analysis["suspicious_indicators"],
+        )
 
     def test_rejects_output_outside_sample_output(self):
         with self.assertRaises(ValueError):
