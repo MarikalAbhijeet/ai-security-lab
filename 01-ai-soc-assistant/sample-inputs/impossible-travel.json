@@ -1,0 +1,18 @@
+{
+  "alert_id": "SAMPLE-004",
+  "alert_type": "impossible_travel",
+  "title": "Impossible travel activity detected",
+  "timestamp": "2026-06-03T18:20:00Z",
+  "source_product": "Microsoft Sentinel",
+  "severity": "High",
+  "user": "morgan.lee@example.com",
+  "host": "ENTRA-SIGNIN-LOG",
+  "ip_address": "198.51.100.17",
+  "location": "Berlin, Germany",
+  "previous_location": "Dallas, United States",
+  "previous_signin_time": "2026-06-03T16:50:00Z",
+  "current_signin_time": "2026-06-03T18:20:00Z",
+  "application": "Azure Portal",
+  "query_start_time": "2026-06-03T15:00:00Z",
+  "query_end_time": "2026-06-03T19:00:00Z"
+}

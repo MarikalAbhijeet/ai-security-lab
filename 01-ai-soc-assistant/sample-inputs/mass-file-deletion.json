@@ -1,0 +1,17 @@
+{
+  "alert_id": "SAMPLE-005",
+  "alert_type": "mass_file_deletion",
+  "title": "Mass file deletion detected in SharePoint",
+  "timestamp": "2026-06-03T19:10:00Z",
+  "source_product": "Microsoft Sentinel",
+  "severity": "Critical",
+  "user": "taylor.brooks@example.com",
+  "host": "LAB-WIN-033",
+  "ip_address": "10.10.9.33",
+  "workload": "SharePoint Online",
+  "site_url": "https://sharepoint.example.invalid/sites/sample-finance",
+  "deleted_file_count": 487,
+  "affected_path": "/Shared Documents/Budget Planning/",
+  "query_start_time": "2026-06-03T18:30:00Z",
+  "query_end_time": "2026-06-03T19:30:00Z"
+}
