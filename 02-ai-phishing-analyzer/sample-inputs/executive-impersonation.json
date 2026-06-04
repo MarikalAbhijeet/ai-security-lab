@@ -1,0 +1,13 @@
+{
+  "sender": "chief.executive@leadership.example.com",
+  "reply_to": "assistant-request@external-mail.example.org",
+  "subject": "Are you available for a confidential task?",
+  "body": "This is the CEO. I need you to handle a confidential request immediately. Do not call me, just reply when you are available.",
+  "urls": [],
+  "attachment_name": null,
+  "received_timestamp": "2026-06-03T12:40:00Z",
+  "spf_result": "softfail",
+  "dkim_result": "none",
+  "dmarc_result": "fail",
+  "user_reported_reason": "User thought the tone and sender looked unusual."
+}

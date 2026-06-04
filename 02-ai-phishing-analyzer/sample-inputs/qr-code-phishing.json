@@ -1,0 +1,15 @@
+{
+  "sender": "it-support@device-enrollment.example.com",
+  "reply_to": "mobile-help@device-enrollment.example.com",
+  "subject": "MFA mobile authentication required",
+  "body": "Scan the QR code with your phone camera to complete mobile authentication. Sign in immediately to keep access active.",
+  "urls": [
+    "https://device-enrollment.example.com/qr-login"
+  ],
+  "attachment_name": "mfa_qr_code.png",
+  "received_timestamp": "2026-06-03T13:25:00Z",
+  "spf_result": "pass",
+  "dkim_result": "fail",
+  "dmarc_result": "fail",
+  "user_reported_reason": "User reported a QR code asking for authentication."
+}

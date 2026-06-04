@@ -1,0 +1,15 @@
+{
+  "sender": "service-desk@internal-it.example.com",
+  "reply_to": "service-desk@internal-it.example.com",
+  "subject": "Scheduled maintenance notification",
+  "body": "Internal IT will perform scheduled maintenance during the approved change window. No action required. This message is informational.",
+  "urls": [
+    "https://internal-it.example.com/status"
+  ],
+  "attachment_name": null,
+  "received_timestamp": "2026-06-03T14:00:00Z",
+  "spf_result": "pass",
+  "dkim_result": "pass",
+  "dmarc_result": "pass",
+  "user_reported_reason": "User forwarded the notice to confirm it was expected."
+}

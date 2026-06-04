@@ -1,0 +1,15 @@
+{
+  "sender": "ap-notices@supplier.example.net",
+  "reply_to": "new-payments@supplier-update.example.net",
+  "subject": "Urgent vendor payment change request",
+  "body": "Our updated bank details are attached to this request. Please update wire instructions today only and do not delay remittance.",
+  "urls": [
+    "https://supplier-update.example.net/payment-change"
+  ],
+  "attachment_name": "new_wire_instructions.pdf",
+  "received_timestamp": "2026-06-03T11:30:00Z",
+  "spf_result": "pass",
+  "dkim_result": "neutral",
+  "dmarc_result": "fail",
+  "user_reported_reason": "User reported a suspicious payment change request."
+}

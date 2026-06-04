@@ -1,0 +1,13 @@
+{
+  "sender": "billing@vendor-portal.example.com",
+  "reply_to": "payments@vendor-portal.example.com",
+  "subject": "Final notice: invoice past due",
+  "body": "Please review the attached invoice immediately. Payment is past due and service may be interrupted within 24 hours.",
+  "urls": [],
+  "attachment_name": "Invoice_60491.html",
+  "received_timestamp": "2026-06-03T10:05:00Z",
+  "spf_result": "pass",
+  "dkim_result": "fail",
+  "dmarc_result": "fail",
+  "user_reported_reason": "User did not recognize the invoice or vendor."
+}
