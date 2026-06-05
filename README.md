@@ -104,6 +104,24 @@ python -m unittest discover -s tests
 
 GitHub Actions also runs the full test suite on push and pull request. See [docs/testing_guide.md](docs/testing_guide.md) for more detail.
 
+## Dashboard
+
+A simple Streamlit dashboard is available in `dashboard/`. It lets you choose one of the four projects, select a local fake/sample JSON input file, run the matching analyzer, and view the generated Markdown report in the browser.
+
+Install the dashboard dependency from the repository root:
+
+```powershell
+python -m pip install -r .\dashboard\requirements.txt
+```
+
+Run the dashboard from the repository root:
+
+```powershell
+python -m streamlit run .\dashboard\app.py
+```
+
+On Windows, use `py -3` if `python` is not available. The dashboard is local-only and does not call paid APIs, external AI services, Microsoft services, vendor portals, or live security systems.
+
 ## Suggested Use Cases
 
 ### SOC Teams
