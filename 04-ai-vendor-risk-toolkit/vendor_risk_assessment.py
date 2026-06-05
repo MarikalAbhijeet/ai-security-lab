@@ -12,6 +12,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 SAMPLE_INPUT_DIR = PROJECT_ROOT / "sample-inputs"
 SAMPLE_OUTPUT_DIR = PROJECT_ROOT / "sample-output"
+DEFAULT_BATCH_OUTPUT_DIR = SAMPLE_OUTPUT_DIR / "batch"
 
 REQUIRED_VENDOR_FIELDS = {
     "product_name",
@@ -533,13 +534,61 @@ def save_report(report, output_path):
     output_path.write_text(report + "\n", encoding="utf-8")
 
 
+def resolve_output_dir(output_dir):
+    """Resolve and validate a batch output directory."""
+    output_dir = Path(output_dir or DEFAULT_BATCH_OUTPUT_DIR).resolve()
+    sample_output_dir = SAMPLE_OUTPUT_DIR.resolve()
+
+    if output_dir != sample_output_dir and sample_output_dir not in output_dir.parents:
+        raise ValueError("Batch output directory must stay inside the sample-output folder.")
+
+    return output_dir
+
+
+def report_name_for_vendor(profile_path):
+    """Return a deterministic report filename for one vendor profile."""
+    return f"{Path(profile_path).stem}-risk-report.md"
+
+
+def generate_report_for_file(profile_path, output_path=None):
+    """Generate a report for one vendor profile and optionally save it."""
+    profile = load_vendor_profile(profile_path)
+    report = generate_report(profile)
+    if output_path:
+        save_report(report, Path(output_path))
+    return report
+
+
+def generate_batch_reports(output_dir=None):
+    """Generate reports for every sample vendor profile JSON file."""
+    output_dir = resolve_output_dir(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved_reports = []
+
+    for profile_path in sorted(SAMPLE_INPUT_DIR.glob("*.json")):
+        output_path = output_dir / report_name_for_vendor(profile_path)
+        generate_report_for_file(profile_path, output_path)
+        saved_reports.append(output_path)
+
+    return saved_reports
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate a rule-based AI vendor risk report.")
-    parser.add_argument("vendor_profile", help="Path to one fake/sample vendor JSON profile.")
+    parser.add_argument("vendor_profile", nargs="?", help="Path to one fake/sample vendor JSON profile.")
     parser.add_argument(
         "-o",
         "--output",
         help="Optional path for the generated Markdown report. If omitted, the report prints to the console.",
+    )
+    parser.add_argument(
+        "--batch",
+        action="store_true",
+        help="Process all JSON files in the sample-inputs folder.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        help="Directory for batch Markdown reports. Defaults to sample-output/batch and must stay inside sample-output.",
     )
     return parser.parse_args()
 
@@ -547,14 +596,21 @@ def parse_args():
 def main():
     try:
         args = parse_args()
-        profile = load_vendor_profile(args.vendor_profile)
-        report = generate_report(profile)
+        if args.batch:
+            if args.vendor_profile or args.output:
+                raise ValueError("--batch cannot be used with vendor_profile or --output.")
+            saved_reports = generate_batch_reports(args.output_dir)
+            print(f"Saved {len(saved_reports)} reports to {resolve_output_dir(args.output_dir)}")
+            return
+
+        if not args.vendor_profile:
+            raise ValueError("vendor_profile is required unless --batch is used.")
 
         if args.output:
-            output_path = Path(args.output)
-            save_report(report, output_path)
-            print(f"Report saved to {output_path}")
+            generate_report_for_file(args.vendor_profile, args.output)
+            print(f"Report saved to {Path(args.output)}")
         else:
+            report = generate_report_for_file(args.vendor_profile)
             print(report)
     except ValueError as error:
         raise SystemExit(f"Error: {error}") from error

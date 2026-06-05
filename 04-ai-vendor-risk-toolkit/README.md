@@ -83,6 +83,15 @@ python .\vendor_risk_assessment.py .\sample-inputs\contoso-ai-notes.json
 python .\vendor_risk_assessment.py .\sample-inputs\northwind-ai-email-assistant.json
 ```
 
+Run all sample vendor profiles in batch mode:
+
+```powershell
+python .\vendor_risk_assessment.py --batch
+python .\vendor_risk_assessment.py --batch --output-dir .\sample-output\batch
+```
+
+By default, batch mode saves reports to `sample-output/batch`.
+
 ## Example Output
 
 ```text

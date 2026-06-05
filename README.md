@@ -82,6 +82,28 @@ python .\vendor_risk_assessment.py .\sample-inputs\fabrikam-support-copilot.json
 python -m unittest discover -s tests
 ```
 
+## Testing
+
+Run every project test suite from the repository root:
+
+```powershell
+python .\run_all_tests.py
+```
+
+On Windows, if `python` is not available:
+
+```powershell
+py -3 .\run_all_tests.py
+```
+
+Individual project tests can still be run from each project folder with:
+
+```powershell
+python -m unittest discover -s tests
+```
+
+GitHub Actions also runs the full test suite on push and pull request. See [docs/testing_guide.md](docs/testing_guide.md) for more detail.
+
 ## Suggested Use Cases
 
 ### SOC Teams

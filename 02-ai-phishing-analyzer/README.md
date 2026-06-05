@@ -81,6 +81,15 @@ python .\phishing_analyzer.py .\sample-inputs\qr-code-phishing.json
 python .\phishing_analyzer.py .\sample-inputs\benign-internal-it-notification.json
 ```
 
+Run all sample emails in batch mode:
+
+```powershell
+python .\phishing_analyzer.py --batch
+python .\phishing_analyzer.py --batch --output-dir .\sample-output\batch
+```
+
+By default, batch mode saves reports to `sample-output/batch`.
+
 ## Example Output
 
 ```text

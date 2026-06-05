@@ -90,6 +90,15 @@ python .\prompt_injection_lab.py .\sample-inputs\fake-data-exfiltration.json
 python .\prompt_injection_lab.py .\sample-inputs\benign-normal-prompt.json
 ```
 
+Run all sample prompt tests in batch mode:
+
+```powershell
+python .\prompt_injection_lab.py --batch
+python .\prompt_injection_lab.py --batch --output-dir .\sample-output\batch
+```
+
+By default, batch mode saves reports to `sample-output/batch`.
+
 ## Example Output
 
 ```text

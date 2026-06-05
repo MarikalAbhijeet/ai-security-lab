@@ -73,6 +73,15 @@ python .\triage_assistant.py .\sample-inputs\impossible-travel.json
 python .\triage_assistant.py .\sample-inputs\mass-file-deletion.json
 ```
 
+Run all sample alerts in batch mode:
+
+```powershell
+python .\triage_assistant.py --batch
+python .\triage_assistant.py --batch --output-dir .\sample-output\batch
+```
+
+By default, batch mode saves reports to `sample-output/batch`.
+
 ## Example Workflow
 
 1. Open one sample alert JSON file.
