@@ -22,7 +22,9 @@ SECURITY_COPILOT_DIR = REPO_ROOT / "security_copilot"
 if str(SECURITY_COPILOT_DIR) not in sys.path:
     sys.path.insert(0, str(SECURITY_COPILOT_DIR))
 
-from copilot_assistant import answer_question, render_markdown  # noqa: E402
+from config import load_config  # noqa: E402
+from copilot_assistant import ANSWER_MODES, answer_question, render_markdown  # noqa: E402
+from ollama_client import SETUP_INSTRUCTIONS, check_ollama_status  # noqa: E402
 
 
 def main() -> None:
@@ -107,25 +109,71 @@ def render_copilot_chat() -> None:
         "or vendor confidential data. Answers use local lab files only."
     )
 
-    question = st.text_area(
-        "Question",
-        value="Summarize the SOC triage guidance for suspicious script activity.",
-        height=100,
-    )
+    try:
+        config = load_config()
+        status = check_ollama_status(config)
+    except ValueError as error:
+        st.error(str(error))
+        return
+
+    status_label = "Ready" if not status.setup_required else "Setup required"
+    st.info(f"Provider: {status.provider} | Model: {status.model} | Status: {status_label}")
+    if status.setup_required and not config.uses_mock:
+        st.warning(status.message)
+        st.code(SETUP_INSTRUCTIONS, language="text")
+
+    answer_mode = st.selectbox("Answer mode", options=ANSWER_MODES, index=0)
     top_k = st.slider("Retrieved sources", min_value=1, max_value=10, value=5)
 
-    if st.button("Ask Security Copilot", type="primary"):
+    if "copilot_messages" not in st.session_state:
+        st.session_state["copilot_messages"] = []
+
+    for message in st.session_state["copilot_messages"]:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+            if message.get("sources"):
+                with st.expander("Retrieved source files"):
+                    for source in message["sources"]:
+                        st.write(f"- `{source['path']}` (score: {source['score']})")
+
+    question = st.chat_input("Ask about the local AI Security Lab documentation")
+    if question:
+        st.session_state["copilot_messages"].append({"role": "user", "content": question})
+        with st.chat_message("user"):
+            st.markdown(question)
+
         try:
-            result = answer_question(question, index_root=Path(REPO_ROOT), top_k=top_k)
+            result = answer_question(
+                question,
+                answer_mode=answer_mode,
+                index_root=Path(REPO_ROOT),
+                top_k=top_k,
+                config=config,
+            )
             markdown = render_markdown(result)
         except ValueError as error:
             st.error(str(error))
             return
 
-        st.markdown(markdown)
-        with st.expander("Retrieved source files"):
-            for source in result["sources"]:
-                st.write(f"- `{source['path']}` (score: {source['score']})")
+        if result["setup_required"]:
+            st.warning("Ollama setup is required before local LLM answers are available.")
+            st.code(SETUP_INSTRUCTIONS, language="text")
+
+        history_content = "\n\n".join(
+            [
+                result["answer"],
+                f"**Retrieval confidence:** {result['retrieval_confidence']}",
+                result["safety_note"],
+            ]
+        )
+        st.session_state["copilot_messages"].append(
+            {"role": "assistant", "content": history_content, "sources": result["sources"]}
+        )
+        with st.chat_message("assistant"):
+            st.markdown(markdown)
+            with st.expander("Retrieved source files"):
+                for source in result["sources"]:
+                    st.write(f"- `{source['path']}` (score: {source['score']})")
 
 
 if __name__ == "__main__":

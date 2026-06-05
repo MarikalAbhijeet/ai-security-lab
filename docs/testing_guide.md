@@ -1,6 +1,6 @@
 # Testing Guide
 
-This repository uses Python's standard `unittest` module. Projects 1-4 use only the Python standard library. The dashboard uses Streamlit, Project 5 uses pandas and scikit-learn, and Security Copilot Chat uses scikit-learn for local TF-IDF retrieval.
+This repository uses Python's standard `unittest` module. Projects 1-4 use only the Python standard library. The dashboard uses Streamlit, Project 5 uses pandas and scikit-learn, and Security Copilot Chat uses scikit-learn for local TF-IDF retrieval. Copilot tests use mock mode and do not require Ollama.
 
 All tests use fake/sample data only.
 

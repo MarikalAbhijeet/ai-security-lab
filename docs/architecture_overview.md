@@ -1,8 +1,8 @@
 # Architecture Overview
 
-AI Security Lab is organized as five independent Python projects, one offline Security Copilot assistant, and one Streamlit dashboard. Projects 1-4 read local fake/sample JSON files and apply transparent rule-based logic. Project 5 reads local synthetic CSV logs, applies an IsolationForest model, and produces a Markdown anomaly report.
+AI Security Lab is organized as five independent Python projects, one local-first Security Copilot assistant, and one Streamlit dashboard. Projects 1-4 read local fake/sample JSON files and apply transparent rule-based logic. Project 5 reads local synthetic CSV logs, applies an IsolationForest model, and produces a Markdown anomaly report.
 
-No project calls paid APIs, external AI services, Microsoft services, vendor systems, or live security platforms.
+No project calls paid APIs, Microsoft services, vendor systems, or live security platforms. Security Copilot can call only a local Ollama instance on the configured local URL, and tests use mock mode without Ollama.
 
 ## Repository Layout
 
@@ -13,7 +13,7 @@ No project calls paid APIs, external AI services, Microsoft services, vendor sys
 | `03-prompt-injection-lab` | Safe prompt injection test evaluator |
 | `04-ai-vendor-risk-toolkit` | AI vendor risk scoring and report generator |
 | `05-ml-anomaly-detection` | IsolationForest anomaly detection for synthetic security logs |
-| `security_copilot` | Offline retrieval-based assistant over local repo documentation |
+| `security_copilot` | Local-first Security Copilot over local repo documentation with Ollama and mock mode |
 | `dashboard` | Streamlit UI that runs the local analyzers |
 | `docs` | Portfolio documentation, testing guide, mappings, and walkthroughs |
 | `run_all_tests.py` | Repo-wide test runner |
@@ -68,11 +68,11 @@ This is a synthetic lab model, not a production detection model.
 
 ## How Security Copilot Chat Works
 
-Security Copilot Chat indexes local Markdown, TXT, KQL, PS1, and README files from this repository. It excludes `.git`, `__pycache__`, `.env`, virtual environments, `node_modules`, and sensitive filename patterns.
+Security Copilot Chat indexes local Markdown, TXT, KQL, PS1, JSON, CSV, and README files from this repository. It excludes `.git`, `__pycache__`, `.env`, virtual environments, `node_modules`, prompt templates, generated Copilot answers, and sensitive filename patterns.
 
-The assistant uses TF-IDF and cosine similarity to retrieve relevant local files for a question. It then builds a source-cited answer from retrieved snippets and adds a confidence-style note based on retrieval score.
+The assistant uses TF-IDF and cosine similarity to retrieve relevant local chunks for a question. Guardrails run before retrieval and LLM calls. The assistant then builds a constrained prompt from cited local context and generates through local Ollama, or through deterministic mock mode during tests.
 
-Version 1 does not call paid APIs, external LLMs, or live systems. Optional LLM mode is future-ready documentation only and disabled by default.
+This is a synthetic lab assistant, not a production SOC copilot. It does not call cloud LLMs, paid APIs, or live systems, and all generated answers require human review.
 
 ## How The Dashboard Works
 

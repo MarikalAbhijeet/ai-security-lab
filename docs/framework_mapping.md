@@ -77,4 +77,4 @@ The ML anomaly detection module demonstrates how synthetic security features can
 
 ## Local RAG-Style Security Assistance
 
-Security Copilot Chat demonstrates retrieval-augmented security assistance without external model calls. It cites local files, provides a retrieval confidence note, and warns users not to paste sensitive data.
+Security Copilot Chat demonstrates retrieval-augmented security assistance with local-only retrieval, guardrails, local Ollama generation, deterministic mock mode for tests, cited source files, and safe-use warnings.

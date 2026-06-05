@@ -13,7 +13,7 @@ Open the top-level `README.md` and explain that the repo contains four local, ru
 - ML anomaly detection
 - Security Copilot Chat
 
-Emphasize that all data is fake/sample only and no paid APIs or live systems are used.
+Emphasize that all data is fake/sample only and no paid APIs or live systems are used. Security Copilot uses local Ollama when enabled, or mock mode for tests.
 
 ## 2. Run The Test Suite
 
@@ -101,10 +101,12 @@ Explain that the model uses fake/synthetic logs, pandas feature handling, and sc
 ```powershell
 cd ..\security_copilot
 py -3 -m pip install -r .\requirements.txt
+ollama pull qwen2.5:3b
+ollama run qwen2.5:3b
 py -3 .\copilot_assistant.py --question "Summarize the SOC triage guidance for suspicious script activity."
 ```
 
-Point out that the answer cites local files and uses only local lab documentation. Explain that optional LLM mode is future-ready but disabled in version 1.
+Point out that the answer cites local files, uses only local lab documentation as retrieval context, and sends generation only to local Ollama. If Ollama is not running, the CLI and dashboard show setup instructions instead of failing.
 
 ## 10. Demo The Dashboard
 
@@ -137,7 +139,8 @@ Close the demo by stating the safety model:
 - No secrets, tokens, passwords, API keys, real company data, real client data, or real vendor confidential data.
 - No real tenant, user, vendor, client, company, or production telemetry in the ML lab.
 - No real secrets, private documents, or company data typed into Security Copilot Chat.
-- No paid APIs or external AI calls.
+- No paid APIs or cloud AI calls.
+- Security Copilot can call only local Ollama and has mock mode for tests.
 - No live Microsoft, email, ticketing, vendor, or security system integrations.
 
 This keeps the portfolio safe to publish while still showing practical security thinking.

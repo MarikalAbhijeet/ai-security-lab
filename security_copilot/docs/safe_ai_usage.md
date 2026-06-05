@@ -19,8 +19,8 @@ Security Copilot Chat is for fake/sample lab documentation only.
 
 ## Local-Only Boundary
 
-Version 1 uses local TF-IDF retrieval over repository files. It does not send prompts, documents, or answers to external services.
+The assistant uses local TF-IDF retrieval over repository files. By default, generated answers use a local Ollama instance at the configured local URL. Tests use mock mode and do not call Ollama.
 
-## Future LLM Mode
+## Local LLM Mode
 
-Optional LLM mode is future-ready but disabled by default. Any future implementation should use secure secret management outside the repository, explicit user opt-in, safe redaction, and clear data-handling warnings.
+Ollama mode is intended for local workstation demos only. It should not be treated as a production SOC copilot and should not receive sensitive production content. Keep `.env` files out of Git and use `.env.example` only as a safe reference.

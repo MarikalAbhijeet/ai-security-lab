@@ -1,8 +1,8 @@
 # AI Security Lab Dashboard
 
-This is a simple Streamlit dashboard for running the four local AI Security Lab analyzers from one browser interface.
+This is a simple Streamlit dashboard for running the local AI Security Lab analyzers and the local-first Security Copilot from one browser interface.
 
-The dashboard can use fake/sample JSON files already stored in this repository or a custom JSON file uploaded from your computer. It does not call Microsoft services, paid APIs, external AI services, vendor portals, or live security systems.
+The dashboard can use fake/sample JSON files already stored in this repository or a custom JSON file uploaded from your computer. It does not call Microsoft services, paid APIs, cloud AI services, vendor portals, or live security systems. Security Copilot can call only local Ollama when enabled.
 
 ## Included Projects
 
@@ -46,7 +46,7 @@ Then open the local URL shown by Streamlit.
 ## Dashboard Tabs
 
 - `Project Reports`: run the local project analyzers and view Markdown reports.
-- `Security Copilot Chat`: ask a question and retrieve an answer from local AI Security Lab documentation with cited source files.
+- `Security Copilot Chat`: ask a question, choose an answer mode, retrieve local source files, and generate a source-cited answer through local Ollama or mock mode.
 
 ## Input Options
 
@@ -70,6 +70,32 @@ Uploaded JSON is parsed and validated in memory. The dashboard does not save upl
 
 The ML Anomaly Detection project currently uses the included synthetic CSV sample from `05-ml-anomaly-detection/sample-inputs`.
 
+## Security Copilot Chat
+
+The chat tab uses the `security_copilot` module. It shows:
+
+- Ollama provider status
+- Configured local model
+- Setup instructions when Ollama or `qwen2.5:3b` is unavailable
+- Answer mode selection
+- Retrieved source count selection
+- Chat-style message history
+- Local source citations
+
+Default local model setup:
+
+```powershell
+ollama pull qwen2.5:3b
+ollama run qwen2.5:3b
+```
+
+For CI or a dashboard demo without Ollama, set mock mode before starting Streamlit:
+
+```powershell
+$env:COPILOT_TEST_MODE="true"
+python -m streamlit run .\dashboard\app.py
+```
+
 ## Safe Use
 
 - Use only the fake/sample JSON files in each project's `sample-inputs` folder.
@@ -77,6 +103,7 @@ The ML Anomaly Detection project currently uses the included synthetic CSV sampl
 - Do not add or upload real company data, client data, vendor confidential data, secrets, passwords, tokens, API keys, internal policies, or production logs.
 - Do not type real company data, client data, tenant data, vendor confidential data, secrets, passwords, tokens, API keys, internal policies, or production logs into Security Copilot Chat.
 - The dashboard runs local Python scripts only and displays the generated Markdown report in the app.
+- Security Copilot sends prompts only to local Ollama when enabled. It does not use paid APIs or cloud LLM keys.
 
 ## Notes
 
