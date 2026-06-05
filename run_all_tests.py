@@ -11,6 +11,7 @@ PROJECTS = [
     "03-prompt-injection-lab",
     "04-ai-vendor-risk-toolkit",
     "05-ml-anomaly-detection",
+    "security_copilot",
     "dashboard",
 ]
 

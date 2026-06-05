@@ -1,0 +1,26 @@
+[
+  {
+    "question": "What should an analyst check for suspicious PowerShell?",
+    "purpose": "SOC triage guidance for PowerShell activity"
+  },
+  {
+    "question": "How does prompt injection map to OWASP LLM Top 10?",
+    "purpose": "AI security framework mapping"
+  },
+  {
+    "question": "What KQL should I use for risky sign-ins?",
+    "purpose": "SOC hunting query lookup"
+  },
+  {
+    "question": "What questions should we ask an AI vendor before approval?",
+    "purpose": "AI vendor risk review"
+  },
+  {
+    "question": "How does the ML anomaly detection module work?",
+    "purpose": "Synthetic ML model explanation"
+  },
+  {
+    "question": "What are the limitations of this lab?",
+    "purpose": "Safe-use and scope explanation"
+  }
+]

@@ -5,7 +5,7 @@
 ![Security](https://img.shields.io/badge/Focus-AI%20Security%20%7C%20SOC-green)
 ![Portfolio](https://img.shields.io/badge/Portfolio-Security%20Lab-purple)
 
-AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, AI vendor risk review, and synthetic ML anomaly detection using safe local sample data.
+AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, AI vendor risk review, synthetic ML anomaly detection, and local retrieval-based security chat using safe local sample data.
 
 The lab reflects a profile focused on Security Operations, Microsoft Defender, Microsoft Sentinel, Entra ID / IAM, Cloud Security, Python automation, and AI Security. Each tool starts with simple rule-based logic so the workflows are easy to review, extend, and explain.
 
@@ -18,6 +18,7 @@ The lab reflects a profile focused on Security Operations, Microsoft Defender, M
 | [`03-prompt-injection-lab`](03-prompt-injection-lab/README.md) | Evaluates safe sample prompt injection tests and maps findings to AI security concepts. | OWASP LLM Top 10, MITRE ATLAS-style mapping, defensive AI patterns |
 | [`04-ai-vendor-risk-toolkit`](04-ai-vendor-risk-toolkit/README.md) | Scores fake AI vendor profiles and generates Markdown risk reports. | Vendor risk governance, IAM review, data protection, logging, compliance review |
 | [`05-ml-anomaly-detection`](05-ml-anomaly-detection/README.md) | Uses IsolationForest to score fake/synthetic security logs for unusual activity. | ML-assisted SOC triage, anomaly scoring, human review limits |
+| [`security_copilot`](security_copilot/README.md) | Offline retrieval assistant that answers questions from local repo documentation and sample reports. | RAG-style retrieval, source citation, safe AI usage |
 
 ## Why This Project Matters
 
@@ -44,6 +45,7 @@ The repository is intentionally local, transparent, and rule-based. That makes i
 - Streamlit dashboard presentation for local demos
 - scikit-learn IsolationForest modeling on synthetic security data
 - pandas-based CSV validation and feature preparation
+- Offline TF-IDF retrieval and source-cited answer generation
 
 ## Frameworks And Concepts
 
@@ -54,6 +56,7 @@ The repository is intentionally local, transparent, and rule-based. That makes i
 - SOC automation, triage consistency, escalation decisions, and ticket updates
 - Secure local development practices using fake/sample data only
 - ML-assisted triage concepts with human review limitations
+- Retrieval-augmented generation concepts without external LLM calls
 
 See [docs/framework_mapping.md](docs/framework_mapping.md) for the cross-project mapping.
 
@@ -103,11 +106,19 @@ python -m pip install -r requirements.txt
 python .\anomaly_detector.py --input .\sample-inputs\synthetic_signin_logs.csv --output .\sample-output\anomaly_report.md
 ```
 
+### Security Copilot Chat
+
+```powershell
+cd .\security_copilot
+python -m pip install -r requirements.txt
+python .\copilot_assistant.py --question "Summarize the SOC triage guidance for suspicious script activity."
+```
+
 Batch mode for Projects 1-4 processes every JSON file in the project's `sample-inputs` folder. By default, generated reports are saved under `sample-output/batch`.
 
 ## Dashboard
 
-A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose a project, use an included fake/sample input file, run the matching analyzer, and view the generated Markdown report in the browser. Projects 1-4 also support custom fake/sample JSON uploads in the dashboard; Project 5 uses the included synthetic CSV sample.
+A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose a project, use an included fake/sample input file, run the matching analyzer, and view the generated Markdown report in the browser. Projects 1-4 also support custom fake/sample JSON uploads in the dashboard; Project 5 uses the included synthetic CSV sample. The dashboard also includes a Security Copilot Chat tab for asking local-document questions with cited sources.
 
 Install the dashboard dependency from the repository root:
 
@@ -121,7 +132,7 @@ Run the dashboard from the repository root:
 python -m streamlit run .\dashboard\app.py
 ```
 
-The dashboard is local-only. Uploads are parsed in memory and are not saved to the repository. Do not upload real secrets, passwords, tokens, company data, client data, or vendor confidential data. The dashboard does not call paid APIs, external AI services, Microsoft services, vendor portals, or live security systems.
+The dashboard is local-only. Uploads are parsed in memory and are not saved to the repository. Do not upload or type real secrets, passwords, tokens, company data, client data, tenant data, or vendor confidential data. The dashboard does not call paid APIs, external AI services, Microsoft services, vendor portals, or live security systems.
 
 ## Screenshots
 
@@ -158,7 +169,7 @@ GitHub Actions runs the full test suite on push and pull request using `.github/
 
 All data in this repository is fake/sample data only. Do not add real company data, real client data, real vendor confidential data, secrets, passwords, tokens, API keys, private documents, internal policies, or production logs.
 
-The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, external AI services, paid APIs, or live security systems. Do not add real tenant, user, client, company, vendor, or production telemetry to the ML anomaly detection module.
+The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, external AI services, paid APIs, or live security systems. Do not add real tenant, user, client, company, vendor, or production telemetry to the ML anomaly detection module or Security Copilot Chat.
 
 ## Documentation
 

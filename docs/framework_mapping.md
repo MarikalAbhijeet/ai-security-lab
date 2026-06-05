@@ -11,6 +11,7 @@ This document summarizes how AI Security Lab maps the four projects to security 
 | Prompt Injection Lab | Not the primary focus, though some concepts overlap with exfiltration and defense evasion thinking. | Uses MITRE ATLAS-style AI threat categories for unsafe prompt behavior. | Maps prompt injection, sensitive information disclosure, insecure output handling, and excessive agency themes. | AI application controls, safe response behavior, defensive testing |
 | AI Vendor Risk Toolkit | Not the primary focus. | References AI system risk concepts at a governance level. | References LLM application risks in vendor review questions and findings. | Vendor due diligence, IAM controls, data protection, logging, retention, subprocessors, deletion support |
 | ML Anomaly Detection | Maps suspicious synthetic log patterns to valid accounts, brute force, PowerShell, and data destruction concepts. | Not the primary focus. | Not the primary focus. | Human review, model limitations, synthetic ML security lab practices |
+| Security Copilot Chat | Retrieves local ATT&CK-related notes and sample reports when relevant. | Retrieves local AI security notes when relevant. | Retrieves local OWASP LLM notes when relevant. | Safe AI usage, source citation, local-only RAG boundaries |
 
 ## MITRE ATT&CK
 
@@ -73,3 +74,7 @@ The lab demonstrates SOC automation by turning structured sample inputs into con
 ## ML-Assisted Triage
 
 The ML anomaly detection module demonstrates how synthetic security features can be scored for unusual activity. It uses anomaly scores as triage leads and explicitly warns that model output is not a confirmed incident. This keeps the portfolio claim realistic while showing familiarity with ML security workflows.
+
+## Local RAG-Style Security Assistance
+
+Security Copilot Chat demonstrates retrieval-augmented security assistance without external model calls. It cites local files, provides a retrieval confidence note, and warns users not to paste sensitive data.

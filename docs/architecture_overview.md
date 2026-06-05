@@ -1,6 +1,6 @@
 # Architecture Overview
 
-AI Security Lab is organized as five independent Python projects plus one Streamlit dashboard. Projects 1-4 read local fake/sample JSON files and apply transparent rule-based logic. Project 5 reads local synthetic CSV logs, applies an IsolationForest model, and produces a Markdown anomaly report.
+AI Security Lab is organized as five independent Python projects, one offline Security Copilot assistant, and one Streamlit dashboard. Projects 1-4 read local fake/sample JSON files and apply transparent rule-based logic. Project 5 reads local synthetic CSV logs, applies an IsolationForest model, and produces a Markdown anomaly report.
 
 No project calls paid APIs, external AI services, Microsoft services, vendor systems, or live security platforms.
 
@@ -13,6 +13,7 @@ No project calls paid APIs, external AI services, Microsoft services, vendor sys
 | `03-prompt-injection-lab` | Safe prompt injection test evaluator |
 | `04-ai-vendor-risk-toolkit` | AI vendor risk scoring and report generator |
 | `05-ml-anomaly-detection` | IsolationForest anomaly detection for synthetic security logs |
+| `security_copilot` | Offline retrieval-based assistant over local repo documentation |
 | `dashboard` | Streamlit UI that runs the local analyzers |
 | `docs` | Portfolio documentation, testing guide, mappings, and walkthroughs |
 | `run_all_tests.py` | Repo-wide test runner |
@@ -65,9 +66,17 @@ The output is a Markdown report with total events, anomaly count, top suspicious
 
 This is a synthetic lab model, not a production detection model.
 
+## How Security Copilot Chat Works
+
+Security Copilot Chat indexes local Markdown, TXT, KQL, PS1, and README files from this repository. It excludes `.git`, `__pycache__`, `.env`, virtual environments, `node_modules`, and sensitive filename patterns.
+
+The assistant uses TF-IDF and cosine similarity to retrieve relevant local files for a question. It then builds a source-cited answer from retrieved snippets and adds a confidence-style note based on retrieval score.
+
+Version 1 does not call paid APIs, external LLMs, or live systems. Optional LLM mode is future-ready documentation only and disabled by default.
+
 ## How The Dashboard Works
 
-The Streamlit dashboard in `dashboard/app.py` provides a simple browser interface over the local analyzers. It uses a fixed project mapping, lists sample files only from the selected project's `sample-inputs` folder, and runs the matching analyzer script locally.
+The Streamlit dashboard in `dashboard/app.py` provides a simple browser interface over the local analyzers and Security Copilot Chat. It uses a fixed project mapping, lists sample files only from the selected project's `sample-inputs` folder, and runs the matching analyzer script locally.
 
 The dashboard displays the generated Markdown report and raw Markdown. It uses safe error handling for invalid selections, missing scripts, analyzer failures, and timeouts.
 

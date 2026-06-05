@@ -11,6 +11,7 @@ The dashboard can use fake/sample JSON files already stored in this repository o
 - Prompt Injection Lab
 - AI Vendor Risk Toolkit
 - ML Anomaly Detection
+- Security Copilot Chat
 
 ## Setup
 
@@ -42,6 +43,11 @@ py -3 -m streamlit run .\dashboard\app.py
 
 Then open the local URL shown by Streamlit.
 
+## Dashboard Tabs
+
+- `Project Reports`: run the local project analyzers and view Markdown reports.
+- `Security Copilot Chat`: ask a question and retrieve an answer from local AI Security Lab documentation with cited source files.
+
 ## Input Options
 
 ### Use Sample JSON
@@ -69,6 +75,7 @@ The ML Anomaly Detection project currently uses the included synthetic CSV sampl
 - Use only the fake/sample JSON files in each project's `sample-inputs` folder.
 - If using upload mode, upload fake/sample JSON only.
 - Do not add or upload real company data, client data, vendor confidential data, secrets, passwords, tokens, API keys, internal policies, or production logs.
+- Do not type real company data, client data, tenant data, vendor confidential data, secrets, passwords, tokens, API keys, internal policies, or production logs into Security Copilot Chat.
 - The dashboard runs local Python scripts only and displays the generated Markdown report in the app.
 
 ## Notes

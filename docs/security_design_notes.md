@@ -24,6 +24,8 @@ The analyzer projects do not connect to:
 
 The ML anomaly detection module uses only a local synthetic CSV file and local Python libraries.
 
+Security Copilot Chat uses local repository documents only. It excludes hidden files, `.git`, `.env`, virtual environments, cache folders, build folders, internal instruction files, dependency manifests, and sensitive filename patterns. It does not send questions or retrieved context to external services.
+
 The Streamlit dashboard runs the same local analyzer scripts and displays the resulting Markdown.
 
 ## Input Validation
@@ -44,6 +46,8 @@ The dashboard avoids arbitrary path input. Users choose from a fixed list of fou
 
 Analyzer scripts are launched with argument lists rather than shell strings, reducing command-injection risk. The dashboard also uses a timeout and displays safe error messages for failures.
 
+Security Copilot Chat validates question length and retrieves only from local repository files. Users are warned not to type real secrets, credentials, company data, client data, tenant data, or vendor confidential data.
+
 ## Prompt Safety
 
 The prompt injection lab uses defensive sample prompts. The examples describe unsafe request patterns without including real secrets, real private policies, working exploit chains, or operational instructions that would enable abuse.
@@ -52,7 +56,7 @@ The expected safe behavior reinforces refusal, least privilege, instruction hier
 
 ## Dependency Approach
 
-Projects 1-4 use the Python standard library only. Project 5 adds pandas and scikit-learn for local synthetic ML anomaly detection. The dashboard adds Streamlit as a presentation dependency in `dashboard/requirements.txt`.
+Projects 1-4 use the Python standard library only. Project 5 adds pandas and scikit-learn for local synthetic ML anomaly detection. Security Copilot Chat uses scikit-learn for local TF-IDF retrieval. The dashboard adds Streamlit as a presentation dependency in `dashboard/requirements.txt`.
 
 Keeping dependencies minimal makes the repo easier to review and reduces unnecessary supply-chain exposure.
 

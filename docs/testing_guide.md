@@ -1,6 +1,6 @@
 # Testing Guide
 
-This repository uses Python's standard `unittest` module. Projects 1-4 use only the Python standard library. The dashboard uses Streamlit, and Project 5 uses pandas and scikit-learn for the synthetic ML anomaly detection lab.
+This repository uses Python's standard `unittest` module. Projects 1-4 use only the Python standard library. The dashboard uses Streamlit, Project 5 uses pandas and scikit-learn, and Security Copilot Chat uses scikit-learn for local TF-IDF retrieval.
 
 All tests use fake/sample data only.
 
@@ -11,6 +11,7 @@ From the repository root:
 ```powershell
 python -m pip install -r .\dashboard\requirements.txt
 python -m pip install -r .\05-ml-anomaly-detection\requirements.txt
+python -m pip install -r .\security_copilot\requirements.txt
 python .\run_all_tests.py
 ```
 
@@ -54,6 +55,14 @@ python -m unittest discover -s tests
 
 ```powershell
 cd .\05-ml-anomaly-detection
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests
+```
+
+### Security Copilot Chat
+
+```powershell
+cd .\security_copilot
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests
 ```

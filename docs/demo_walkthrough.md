@@ -11,6 +11,7 @@ Open the top-level `README.md` and explain that the repo contains four local, ru
 - Prompt injection lab
 - AI vendor risk toolkit
 - ML anomaly detection
+- Security Copilot Chat
 
 Emphasize that all data is fake/sample only and no paid APIs or live systems are used.
 
@@ -95,7 +96,17 @@ py -3 .\anomaly_detector.py --input .\sample-inputs\synthetic_signin_logs.csv --
 
 Explain that the model uses fake/synthetic logs, pandas feature handling, and scikit-learn IsolationForest. Point out that the report treats anomalies as triage leads that require human validation.
 
-## 9. Demo The Dashboard
+## 9. Demo Security Copilot Chat
+
+```powershell
+cd ..\security_copilot
+py -3 -m pip install -r .\requirements.txt
+py -3 .\copilot_assistant.py --question "Summarize the SOC triage guidance for suspicious script activity."
+```
+
+Point out that the answer cites local files and uses only local lab documentation. Explain that optional LLM mode is future-ready but disabled in version 1.
+
+## 10. Demo The Dashboard
 
 From the repository root, install the dashboard dependency if needed:
 
@@ -116,15 +127,16 @@ In the browser:
 3. Generate the report.
 4. Review the Markdown output.
 
-The dashboard is a local presentation layer over the same analyzer scripts. Projects 1-4 use JSON samples and optional custom fake/sample JSON uploads. Project 5 uses the included synthetic CSV sample.
+The dashboard is a local presentation layer over the same analyzer scripts and the Security Copilot Chat module. Projects 1-4 use JSON samples and optional custom fake/sample JSON uploads. Project 5 uses the included synthetic CSV sample.
 
-## 10. Explain The Security Boundary
+## 11. Explain The Security Boundary
 
 Close the demo by stating the safety model:
 
 - Fake/sample data only.
 - No secrets, tokens, passwords, API keys, real company data, real client data, or real vendor confidential data.
 - No real tenant, user, vendor, client, company, or production telemetry in the ML lab.
+- No real secrets, private documents, or company data typed into Security Copilot Chat.
 - No paid APIs or external AI calls.
 - No live Microsoft, email, ticketing, vendor, or security system integrations.
 
