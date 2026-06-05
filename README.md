@@ -1,58 +1,70 @@
 # AI Security Lab
 
-AI Security Lab is a portfolio repository of beginner-friendly but professional security projects focused on the intersection of Security Operations and AI Security. The projects use Python, Markdown, safe sample inputs, and rule-based logic to demonstrate practical workflows without relying on paid APIs or real organizational data.
+![Python](https://img.shields.io/badge/Python-3.x-blue)
+![Tests](https://github.com/MarikalAbhijeet/ai-security-lab/actions/workflows/python-tests.yml/badge.svg)
+![Security](https://img.shields.io/badge/Focus-AI%20Security%20%7C%20SOC-green)
+![Portfolio](https://img.shields.io/badge/Portfolio-Security%20Lab-purple)
 
-This lab is designed around a security profile focused on Security Operations, Microsoft Defender, Microsoft Sentinel, Entra ID / IAM, Cloud Security, and AI Security.
+AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, and AI vendor risk review using safe local sample data.
+
+The lab reflects a profile focused on Security Operations, Microsoft Defender, Microsoft Sentinel, Entra ID / IAM, Cloud Security, Python automation, and AI Security. Each tool starts with simple rule-based logic so the workflows are easy to review, extend, and explain.
 
 ## Projects
 
-| Project | Description | Primary Focus |
+| Project | What It Does | Portfolio Signal |
 | --- | --- | --- |
-| `01-ai-soc-assistant` | Rule-based SOC alert triage assistant for fake Microsoft Defender and Sentinel-style alerts. | SOC triage, MITRE ATT&CK, KQL, ticket updates |
-| `02-ai-phishing-analyzer` | Rule-based analyzer for fake user-reported phishing emails. | Email security, phishing triage, containment guidance |
-| `03-prompt-injection-lab` | Safe prompt injection testing lab using fake sample prompts. | OWASP LLM Top 10, MITRE ATLAS-style mapping, AI defensive patterns |
-| `04-ai-vendor-risk-toolkit` | AI vendor risk toolkit with fake vendor profiles, templates, and rule-based scoring. | AI governance, vendor risk, IAM, data protection |
+| [`01-ai-soc-assistant`](01-ai-soc-assistant/README.md) | Generates SOC triage reports from fake Microsoft Defender/Sentinel-style alert JSON files. | SOC investigation, MITRE ATT&CK, KQL, analyst notes, escalation handling |
+| [`02-ai-phishing-analyzer`](02-ai-phishing-analyzer/README.md) | Reviews fake user-reported phishing emails and produces risk ratings, indicators, containment steps, and ticket notes. | Email security, phishing triage, authentication checks, user response guidance |
+| [`03-prompt-injection-lab`](03-prompt-injection-lab/README.md) | Evaluates safe sample prompt injection tests and maps findings to AI security concepts. | OWASP LLM Top 10, MITRE ATLAS-style mapping, defensive AI patterns |
+| [`04-ai-vendor-risk-toolkit`](04-ai-vendor-risk-toolkit/README.md) | Scores fake AI vendor profiles and generates Markdown risk reports. | Vendor risk governance, IAM review, data protection, logging, compliance review |
+
+## Why This Project Matters
+
+AI Security Lab shows how security teams can evaluate AI-related risks without relying on black-box tooling or live production data. The projects model common workflows for security analysts, AI security teams, and governance teams: triaging alerts, reviewing suspicious emails, testing unsafe prompt behavior, and assessing vendor controls.
+
+The repository is intentionally local, transparent, and rule-based. That makes it useful for interviews, GitHub portfolio review, learning, and future extension into richer detection logic or approved enterprise integrations.
 
 ## Skills Demonstrated
 
+- Python automation with readable, beginner-friendly structure
+- Rule-based security analysis and scoring
+- JSON input validation and safe file handling
+- Markdown report generation
 - SOC alert triage and analyst documentation
 - Microsoft Defender and Microsoft Sentinel-style investigation workflows
 - KQL hunting query development
-- User-reported phishing analysis
-- IAM, SSO, MFA, RBAC, and access-control review
-- Cloud and SaaS security risk thinking
-- AI prompt injection testing and defensive design
-- AI vendor risk and security governance
-- Markdown reporting and portfolio documentation
-- Python automation using only the standard library
+- User-reported phishing analysis and containment planning
+- IAM, SSO, MFA, RBAC, logging, retention, and deletion control review
+- AI prompt injection testing and defensive response design
+- AI vendor risk and governance documentation
+- Batch processing and repeatable report generation
 - Unit testing with `unittest`
+- GitHub Actions CI for test automation
+- Streamlit dashboard presentation for local demos
 
-## Frameworks Referenced
+## Frameworks And Concepts
 
-- MITRE ATT&CK
-- MITRE ATLAS
-- OWASP LLM Top 10
+- MITRE ATT&CK for SOC alert and phishing-style tactic/technique mapping
+- MITRE ATLAS-style concepts for AI threat scenarios
+- OWASP LLM Top 10 for prompt injection and AI application risk categories
 - AI vendor risk and security governance concepts
+- SOC automation, triage consistency, escalation decisions, and ticket updates
+- Secure local development practices using fake/sample data only
 
-## Safe-Use Disclaimer
-
-All data in this repository is fake/sample data only. Do not add real company data, real client data, real vendor confidential data, secrets, passwords, tokens, API keys, private documents, internal policies, or production logs.
-
-The tools in this lab are educational portfolio projects. They do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, external AI services, paid APIs, or live security systems.
+See [docs/framework_mapping.md](docs/framework_mapping.md) for the cross-project mapping.
 
 ## How To Run
 
-Each project uses Python standard-library code only. From the repository root, move into a project folder and run the relevant script.
+Each project can run from its own folder using local JSON samples. The four analyzer projects use only the Python standard library.
 
-If `python` is not available on Windows, use `py -3` with the same arguments.
+On Windows, use `py -3` if `python` is not available.
 
 ### Project 1: SOC Alert Triage Assistant
 
 ```powershell
 cd .\01-ai-soc-assistant
 python .\triage_assistant.py .\sample-inputs\risky-sign-in.json
-python .\triage_assistant.py .\sample-inputs\risky-sign-in.json -o .\sample-output\risky-sign-in-triage-report.md
-python -m unittest discover -s tests
+python .\triage_assistant.py --batch
 ```
 
 ### Project 2: AI Phishing Analyzer
@@ -60,17 +72,15 @@ python -m unittest discover -s tests
 ```powershell
 cd .\02-ai-phishing-analyzer
 python .\phishing_analyzer.py .\sample-inputs\microsoft-365-password-reset.json
-python .\phishing_analyzer.py .\sample-inputs\microsoft-365-password-reset.json -o .\sample-output\microsoft-365-password-reset-report.md
-python -m unittest discover -s tests
+python .\phishing_analyzer.py --batch
 ```
 
-### Project 3: Prompt Injection Testing Lab
+### Project 3: Prompt Injection Lab
 
 ```powershell
 cd .\03-prompt-injection-lab
 python .\prompt_injection_lab.py .\sample-inputs\direct-instruction-override.json
-python .\prompt_injection_lab.py .\sample-inputs\direct-instruction-override.json -o .\sample-output\direct-instruction-override-report.md
-python -m unittest discover -s tests
+python .\prompt_injection_lab.py --batch
 ```
 
 ### Project 4: AI Vendor Risk Toolkit
@@ -78,35 +88,14 @@ python -m unittest discover -s tests
 ```powershell
 cd .\04-ai-vendor-risk-toolkit
 python .\vendor_risk_assessment.py .\sample-inputs\fabrikam-support-copilot.json
-python .\vendor_risk_assessment.py .\sample-inputs\fabrikam-support-copilot.json -o .\sample-output\fabrikam-support-copilot-risk-report.md
-python -m unittest discover -s tests
+python .\vendor_risk_assessment.py --batch
 ```
 
-## Testing
-
-Run every project test suite from the repository root:
-
-```powershell
-python .\run_all_tests.py
-```
-
-On Windows, if `python` is not available:
-
-```powershell
-py -3 .\run_all_tests.py
-```
-
-Individual project tests can still be run from each project folder with:
-
-```powershell
-python -m unittest discover -s tests
-```
-
-GitHub Actions also runs the full test suite on push and pull request. See [docs/testing_guide.md](docs/testing_guide.md) for more detail.
+Batch mode processes every JSON file in the project's `sample-inputs` folder. By default, generated reports are saved under `sample-output/batch`.
 
 ## Dashboard
 
-A simple Streamlit dashboard is available in `dashboard/`. It lets you choose one of the four projects, select a local fake/sample JSON input file, run the matching analyzer, and view the generated Markdown report in the browser.
+A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose one of the four projects, select a local fake/sample JSON input file, run the matching analyzer, and view the generated Markdown report in the browser.
 
 Install the dashboard dependency from the repository root:
 
@@ -120,30 +109,46 @@ Run the dashboard from the repository root:
 python -m streamlit run .\dashboard\app.py
 ```
 
-On Windows, use `py -3` if `python` is not available. The dashboard is local-only and does not call paid APIs, external AI services, Microsoft services, vendor portals, or live security systems.
+The dashboard is local-only. It does not call paid APIs, external AI services, Microsoft services, vendor portals, or live security systems.
 
-## Suggested Use Cases
+## Testing And CI
 
-### SOC Teams
+Run all project tests from the repository root:
 
-- Practice alert triage note writing with safe sample Defender and Sentinel-style alerts.
-- Generate repeatable analyst summaries, escalation recommendations, and sample KQL.
-- Review user-reported phishing workflows and containment decision points.
+```powershell
+python .\run_all_tests.py
+```
 
-### AI Security Teams
+Or on Windows:
 
-- Demonstrate prompt injection categories with safe, non-operational examples.
-- Map AI threats to OWASP LLM Top 10 and MITRE ATLAS-style concepts.
-- Document defensive patterns such as instruction hierarchy, input separation, output validation, and least-privilege tool use.
+```powershell
+py -3 .\run_all_tests.py
+```
 
-### Governance and Vendor Risk Teams
+GitHub Actions runs the full test suite on push and pull request using `.github/workflows/python-tests.yml`. See [docs/testing_guide.md](docs/testing_guide.md) for details.
 
-- Review AI vendor controls using sample questionnaires and templates.
-- Evaluate IAM, logging, data retention, model training, subprocessors, and deletion support.
-- Produce executive-style sample reports for conditional approval or risk remediation.
+## Safe Data Disclaimer
 
-## Repository Notes
+All data in this repository is fake/sample data only. Do not add real company data, real client data, real vendor confidential data, secrets, passwords, tokens, API keys, private documents, internal policies, or production logs.
 
-- Each project has its own `README.md`, `sample-inputs`, `sample-output`, and `tests` folder.
-- Projects intentionally start with simple rule-based logic before any AI integration.
-- No external Python packages are required for version 1 of any project.
+The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, external AI services, paid APIs, or live security systems.
+
+## Documentation
+
+- [Architecture overview](docs/architecture_overview.md)
+- [Security design notes](docs/security_design_notes.md)
+- [Framework mapping](docs/framework_mapping.md)
+- [Demo walkthrough](docs/demo_walkthrough.md)
+- [Testing guide](docs/testing_guide.md)
+
+## Future Roadmap
+
+- Add optional CSV summary exports for batch reports.
+- Add richer scoring explanations and confidence fields.
+- Add sample screenshots for dashboard-driven demos.
+- Add optional local configuration files for custom rule tuning.
+- Add approved enterprise integration examples as documentation only.
+- Add more unit tests for malformed sample data and edge cases.
+- Add lightweight diagrams for data flow and analyst workflows.
+- Add a small sample report gallery for quick GitHub review.
+- Add CI documentation that explains what each automated test suite validates.
