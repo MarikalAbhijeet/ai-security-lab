@@ -10,6 +10,7 @@ PROJECTS = [
     "02-ai-phishing-analyzer",
     "03-prompt-injection-lab",
     "04-ai-vendor-risk-toolkit",
+    "dashboard",
 ]
 
 

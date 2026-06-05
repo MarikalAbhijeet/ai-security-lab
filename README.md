@@ -95,7 +95,7 @@ Batch mode processes every JSON file in the project's `sample-inputs` folder. By
 
 ## Dashboard
 
-A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose one of the four projects, select a local fake/sample JSON input file, run the matching analyzer, and view the generated Markdown report in the browser.
+A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose one of the four projects, use an included fake/sample JSON file or upload a custom fake/sample JSON file, run the matching analyzer, and view the generated Markdown report in the browser.
 
 Install the dashboard dependency from the repository root:
 
@@ -109,7 +109,22 @@ Run the dashboard from the repository root:
 python -m streamlit run .\dashboard\app.py
 ```
 
-The dashboard is local-only. It does not call paid APIs, external AI services, Microsoft services, vendor portals, or live security systems.
+The dashboard is local-only. Uploads are parsed in memory and are not saved to the repository. Do not upload real secrets, passwords, tokens, company data, client data, or vendor confidential data. The dashboard does not call paid APIs, external AI services, Microsoft services, vendor portals, or live security systems.
+
+## Screenshots
+
+Screenshots are planned for `assets/screenshots/`. The image files are not included yet; the references below show the intended portfolio gallery layout.
+
+| Screenshot | Purpose |
+| --- | --- |
+| ![Dashboard home placeholder](assets/screenshots/dashboard-home.png) | Streamlit dashboard project selector and sample input picker |
+| ![SOC assistant report placeholder](assets/screenshots/soc-assistant-report.png) | AI SOC Assistant Markdown triage report |
+| ![Phishing analyzer report placeholder](assets/screenshots/phishing-analyzer-report.png) | AI Phishing Analyzer risk rating and containment report |
+| ![Prompt injection report placeholder](assets/screenshots/prompt-injection-report.png) | Prompt Injection Lab risk mapping and safe-response report |
+| ![Vendor risk report placeholder](assets/screenshots/vendor-risk-report.png) | AI Vendor Risk Toolkit executive-style vendor risk report |
+| ![GitHub Actions tests placeholder](assets/screenshots/github-actions-tests.png) | GitHub Actions workflow showing passing Python tests |
+
+See [assets/screenshots/README.md](assets/screenshots/README.md) for capture guidance.
 
 ## Testing And CI
 
