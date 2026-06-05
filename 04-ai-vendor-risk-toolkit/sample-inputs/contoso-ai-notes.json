@@ -1,0 +1,34 @@
+{
+  "product_name": "Contoso AI Notes",
+  "business_use_case": "Generate meeting summaries and action items from sample internal project meetings.",
+  "data_types_processed": [
+    "sample meeting transcripts",
+    "sample user names",
+    "sample action items"
+  ],
+  "authentication_method": "SAML SSO",
+  "sso_support": true,
+  "mfa_support": true,
+  "role_based_access_control": true,
+  "logging_available": true,
+  "audit_log_retention_days": 180,
+  "data_retention_days": 90,
+  "encryption_at_rest": true,
+  "encryption_in_transit": true,
+  "customer_data_used_for_training": false,
+  "model_training_policy": "Customer data is not used for model training in this fake sample profile.",
+  "admin_controls": true,
+  "export_controls": true,
+  "incident_response_sla": "Security incident notification within 72 hours in this sample profile.",
+  "compliance_claims": [
+    "Sample SOC 2 Type II claim",
+    "Sample ISO 27001 claim"
+  ],
+  "subprocessors_disclosed": true,
+  "data_residency": "Sample United States region",
+  "deletion_request_support": true,
+  "risk_notes": [
+    "Strong sample controls for a low-risk demonstration profile.",
+    "Requires normal annual reassessment."
+  ]
+}

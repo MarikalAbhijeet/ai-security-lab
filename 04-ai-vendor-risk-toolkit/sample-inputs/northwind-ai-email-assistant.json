@@ -1,0 +1,33 @@
+{
+  "product_name": "Northwind AI Email Assistant",
+  "business_use_case": "Draft and summarize fake business emails for a sample productivity pilot.",
+  "data_types_processed": [
+    "sample email subject lines",
+    "sample email bodies",
+    "sample contact names"
+  ],
+  "authentication_method": "Local application accounts",
+  "sso_support": false,
+  "mfa_support": false,
+  "role_based_access_control": false,
+  "logging_available": false,
+  "audit_log_retention_days": 0,
+  "data_retention_days": 1095,
+  "encryption_at_rest": false,
+  "encryption_in_transit": true,
+  "customer_data_used_for_training": true,
+  "model_training_policy": "Unclear training policy in this fake sample profile.",
+  "admin_controls": false,
+  "export_controls": false,
+  "incident_response_sla": "Best effort security notification in this sample profile.",
+  "compliance_claims": [
+    "No sample compliance claims provided"
+  ],
+  "subprocessors_disclosed": false,
+  "data_residency": "Unknown in this sample profile",
+  "deletion_request_support": false,
+  "risk_notes": [
+    "Missing IAM and logging controls.",
+    "Training, retention, and deletion practices are not acceptable for production use."
+  ]
+}

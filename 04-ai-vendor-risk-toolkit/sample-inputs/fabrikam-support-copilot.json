@@ -1,0 +1,33 @@
+{
+  "product_name": "Fabrikam Support Copilot",
+  "business_use_case": "Assist support analysts with draft responses for fake customer support tickets.",
+  "data_types_processed": [
+    "sample support ticket text",
+    "sample customer names",
+    "sample troubleshooting notes"
+  ],
+  "authentication_method": "Username and password with optional SSO add-on",
+  "sso_support": false,
+  "mfa_support": true,
+  "role_based_access_control": true,
+  "logging_available": true,
+  "audit_log_retention_days": 30,
+  "data_retention_days": 730,
+  "encryption_at_rest": true,
+  "encryption_in_transit": true,
+  "customer_data_used_for_training": true,
+  "model_training_policy": "Customer data may be used for product improvement unless the customer opts out in this fake sample profile.",
+  "admin_controls": true,
+  "export_controls": false,
+  "incident_response_sla": "Best effort security notification in this sample profile.",
+  "compliance_claims": [
+    "Sample SOC 2 in progress claim"
+  ],
+  "subprocessors_disclosed": false,
+  "data_residency": "Not provided in this sample profile",
+  "deletion_request_support": true,
+  "risk_notes": [
+    "Training policy requires contract review.",
+    "SSO and export controls are not sufficient for production use."
+  ]
+}
