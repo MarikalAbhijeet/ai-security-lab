@@ -5,7 +5,7 @@
 ![Security](https://img.shields.io/badge/Focus-AI%20Security%20%7C%20SOC-green)
 ![Portfolio](https://img.shields.io/badge/Portfolio-Security%20Lab-purple)
 
-AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, and AI vendor risk review using safe local sample data.
+AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, AI vendor risk review, and synthetic ML anomaly detection using safe local sample data.
 
 The lab reflects a profile focused on Security Operations, Microsoft Defender, Microsoft Sentinel, Entra ID / IAM, Cloud Security, Python automation, and AI Security. Each tool starts with simple rule-based logic so the workflows are easy to review, extend, and explain.
 
@@ -17,6 +17,7 @@ The lab reflects a profile focused on Security Operations, Microsoft Defender, M
 | [`02-ai-phishing-analyzer`](02-ai-phishing-analyzer/README.md) | Reviews fake user-reported phishing emails and produces risk ratings, indicators, containment steps, and ticket notes. | Email security, phishing triage, authentication checks, user response guidance |
 | [`03-prompt-injection-lab`](03-prompt-injection-lab/README.md) | Evaluates safe sample prompt injection tests and maps findings to AI security concepts. | OWASP LLM Top 10, MITRE ATLAS-style mapping, defensive AI patterns |
 | [`04-ai-vendor-risk-toolkit`](04-ai-vendor-risk-toolkit/README.md) | Scores fake AI vendor profiles and generates Markdown risk reports. | Vendor risk governance, IAM review, data protection, logging, compliance review |
+| [`05-ml-anomaly-detection`](05-ml-anomaly-detection/README.md) | Uses IsolationForest to score fake/synthetic security logs for unusual activity. | ML-assisted SOC triage, anomaly scoring, human review limits |
 
 ## Why This Project Matters
 
@@ -41,6 +42,8 @@ The repository is intentionally local, transparent, and rule-based. That makes i
 - Unit testing with `unittest`
 - GitHub Actions CI for test automation
 - Streamlit dashboard presentation for local demos
+- scikit-learn IsolationForest modeling on synthetic security data
+- pandas-based CSV validation and feature preparation
 
 ## Frameworks And Concepts
 
@@ -50,12 +53,13 @@ The repository is intentionally local, transparent, and rule-based. That makes i
 - AI vendor risk and security governance concepts
 - SOC automation, triage consistency, escalation decisions, and ticket updates
 - Secure local development practices using fake/sample data only
+- ML-assisted triage concepts with human review limitations
 
 See [docs/framework_mapping.md](docs/framework_mapping.md) for the cross-project mapping.
 
 ## How To Run
 
-Each project can run from its own folder using local JSON samples. The four analyzer projects use only the Python standard library.
+Each project can run from its own folder using local samples. Projects 1-4 use JSON inputs and Python standard-library logic. Project 5 uses a synthetic CSV input with pandas and scikit-learn.
 
 On Windows, use `py -3` if `python` is not available.
 
@@ -91,11 +95,19 @@ python .\vendor_risk_assessment.py .\sample-inputs\fabrikam-support-copilot.json
 python .\vendor_risk_assessment.py --batch
 ```
 
-Batch mode processes every JSON file in the project's `sample-inputs` folder. By default, generated reports are saved under `sample-output/batch`.
+### Project 5: ML Anomaly Detection
+
+```powershell
+cd .\05-ml-anomaly-detection
+python -m pip install -r requirements.txt
+python .\anomaly_detector.py --input .\sample-inputs\synthetic_signin_logs.csv --output .\sample-output\anomaly_report.md
+```
+
+Batch mode for Projects 1-4 processes every JSON file in the project's `sample-inputs` folder. By default, generated reports are saved under `sample-output/batch`.
 
 ## Dashboard
 
-A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose one of the four projects, use an included fake/sample JSON file or upload a custom fake/sample JSON file, run the matching analyzer, and view the generated Markdown report in the browser.
+A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose a project, use an included fake/sample input file, run the matching analyzer, and view the generated Markdown report in the browser. Projects 1-4 also support custom fake/sample JSON uploads in the dashboard; Project 5 uses the included synthetic CSV sample.
 
 Install the dashboard dependency from the repository root:
 
@@ -146,7 +158,7 @@ GitHub Actions runs the full test suite on push and pull request using `.github/
 
 All data in this repository is fake/sample data only. Do not add real company data, real client data, real vendor confidential data, secrets, passwords, tokens, API keys, private documents, internal policies, or production logs.
 
-The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, external AI services, paid APIs, or live security systems.
+The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, external AI services, paid APIs, or live security systems. Do not add real tenant, user, client, company, vendor, or production telemetry to the ML anomaly detection module.
 
 ## Documentation
 

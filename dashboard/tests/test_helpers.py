@@ -12,6 +12,7 @@ sys.path.insert(0, str(DASHBOARD_ROOT))
 
 from helpers import (  # noqa: E402
     PROJECTS,
+    build_sample_command,
     generate_report_from_json,
     list_sample_files,
     load_uploaded_json,
@@ -76,6 +77,22 @@ class DashboardHelperTests(unittest.TestCase):
         for project in PROJECTS.values():
             with self.subTest(project=project.display_name):
                 self.assertGreater(len(list_sample_files(project)), 0)
+
+    def test_ml_project_uses_csv_sample_files(self):
+        project = PROJECTS["ML Anomaly Detection"]
+        sample_files = list_sample_files(project)
+
+        self.assertEqual(project.sample_extension, ".csv")
+        self.assertFalse(project.upload_enabled)
+        self.assertTrue(any(path.name == "synthetic_signin_logs.csv" for path in sample_files))
+
+    def test_ml_project_sample_command_uses_input_option(self):
+        project = PROJECTS["ML Anomaly Detection"]
+        sample_path = validate_sample_file(project, "synthetic_signin_logs.csv")
+        command = build_sample_command(project, sample_path)
+
+        self.assertIn("--input", command)
+        self.assertIn(str(sample_path), command)
 
 
 if __name__ == "__main__":

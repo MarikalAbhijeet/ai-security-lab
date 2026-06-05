@@ -26,6 +26,8 @@ class ProjectConfig:
     validate_function: str
     report_function: str
     input_label: str
+    sample_extension: str = ".json"
+    upload_enabled: bool = True
 
     @property
     def project_dir(self) -> Path:
@@ -77,22 +79,33 @@ PROJECTS = {
         report_function="generate_report",
         input_label="vendor profile",
     ),
+    "ML Anomaly Detection": ProjectConfig(
+        display_name="ML Anomaly Detection",
+        folder="05-ml-anomaly-detection",
+        script_name="anomaly_detector.py",
+        description="Run IsolationForest anomaly detection on fake/synthetic security log CSV data.",
+        validate_function="validate_logs",
+        report_function="generate_report",
+        input_label="synthetic security log CSV",
+        sample_extension=".csv",
+        upload_enabled=False,
+    ),
 }
 
 
 def list_sample_files(project: ProjectConfig) -> list[Path]:
-    """Return JSON sample files for a project."""
+    """Return sample files for a project."""
     if not project.sample_input_dir.is_dir():
         return []
 
-    return sorted(path for path in project.sample_input_dir.glob("*.json") if path.is_file())
+    return sorted(path for path in project.sample_input_dir.glob(f"*{project.sample_extension}") if path.is_file())
 
 
 def validate_sample_file(project: ProjectConfig, selected_name: str) -> Path:
     """Resolve a selected sample file and ensure it stays in sample-inputs."""
     allowed_files = {path.name: path for path in list_sample_files(project)}
     if selected_name not in allowed_files:
-        raise ValueError("Select a valid sample JSON file from the project sample-inputs folder.")
+        raise ValueError("Select a valid sample file from the project sample-inputs folder.")
 
     sample_path = allowed_files[selected_name].resolve()
     sample_root = project.sample_input_dir.resolve()
@@ -166,7 +179,7 @@ def run_analyzer_for_sample(project: ProjectConfig, sample_path: Path) -> str:
 
     try:
         result = subprocess.run(
-            [sys.executable, str(project.script_path), str(sample_path)],
+            build_sample_command(project, sample_path),
             cwd=project.project_dir,
             capture_output=True,
             text=True,
@@ -183,6 +196,14 @@ def run_analyzer_for_sample(project: ProjectConfig, sample_path: Path) -> str:
         raise RuntimeError(error_text[:2_000])
 
     return limit_report(result.stdout.strip())
+
+
+def build_sample_command(project: ProjectConfig, sample_path: Path) -> list[str]:
+    """Build the command for a selected sample file."""
+    if project.sample_extension == ".csv":
+        return [sys.executable, str(project.script_path), "--input", str(sample_path)]
+
+    return [sys.executable, str(project.script_path), str(sample_path)]
 
 
 def limit_report(report: str) -> str:

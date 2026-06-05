@@ -4,7 +4,7 @@ AI Security Lab is designed for safe portfolio demonstration. The tools use loca
 
 ## Safe Sample Data
 
-All project inputs are fake JSON files created for lab use. They are modeled after common security workflows but do not contain real company data, client data, vendor confidential data, internal policies, credentials, API keys, tokens, passwords, private documents, or production logs.
+All project inputs are fake JSON or synthetic CSV files created for lab use. They are modeled after common security workflows but do not contain real company data, client data, tenant data, vendor confidential data, internal policies, credentials, API keys, tokens, passwords, private documents, or production logs.
 
 The sample data is intentionally realistic enough to support portfolio discussion while remaining safe to publish.
 
@@ -21,6 +21,8 @@ The analyzer projects do not connect to:
 - External AI services
 - Paid APIs
 - Live security systems
+
+The ML anomaly detection module uses only a local synthetic CSV file and local Python libraries.
 
 The Streamlit dashboard runs the same local analyzer scripts and displays the resulting Markdown.
 
@@ -50,7 +52,7 @@ The expected safe behavior reinforces refusal, least privilege, instruction hier
 
 ## Dependency Approach
 
-The four core analyzer projects use the Python standard library only. The dashboard adds Streamlit as a presentation dependency in `dashboard/requirements.txt`.
+Projects 1-4 use the Python standard library only. Project 5 adds pandas and scikit-learn for local synthetic ML anomaly detection. The dashboard adds Streamlit as a presentation dependency in `dashboard/requirements.txt`.
 
 Keeping dependencies minimal makes the repo easier to review and reduces unnecessary supply-chain exposure.
 

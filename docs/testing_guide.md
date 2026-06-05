@@ -1,6 +1,6 @@
 # Testing Guide
 
-This repository uses Python's standard `unittest` module. No external Python packages are required for version 1 of the projects.
+This repository uses Python's standard `unittest` module. Projects 1-4 use only the Python standard library. The dashboard uses Streamlit, and Project 5 uses pandas and scikit-learn for the synthetic ML anomaly detection lab.
 
 All tests use fake/sample data only.
 
@@ -9,6 +9,8 @@ All tests use fake/sample data only.
 From the repository root:
 
 ```powershell
+python -m pip install -r .\dashboard\requirements.txt
+python -m pip install -r .\05-ml-anomaly-detection\requirements.txt
 python .\run_all_tests.py
 ```
 
@@ -45,6 +47,14 @@ python -m unittest discover -s tests
 
 ```powershell
 cd .\04-ai-vendor-risk-toolkit
+python -m unittest discover -s tests
+```
+
+### Project 5: ML Anomaly Detection
+
+```powershell
+cd .\05-ml-anomaly-detection
+python -m pip install -r requirements.txt
 python -m unittest discover -s tests
 ```
 

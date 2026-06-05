@@ -1,6 +1,6 @@
 # Architecture Overview
 
-AI Security Lab is organized as four independent Python projects plus one Streamlit dashboard. Each project reads local fake/sample JSON files, applies transparent rule-based logic, and produces Markdown output that resembles analyst or governance documentation.
+AI Security Lab is organized as five independent Python projects plus one Streamlit dashboard. Projects 1-4 read local fake/sample JSON files and apply transparent rule-based logic. Project 5 reads local synthetic CSV logs, applies an IsolationForest model, and produces a Markdown anomaly report.
 
 No project calls paid APIs, external AI services, Microsoft services, vendor systems, or live security platforms.
 
@@ -12,7 +12,8 @@ No project calls paid APIs, external AI services, Microsoft services, vendor sys
 | `02-ai-phishing-analyzer` | Phishing analysis tool for fake user-reported emails |
 | `03-prompt-injection-lab` | Safe prompt injection test evaluator |
 | `04-ai-vendor-risk-toolkit` | AI vendor risk scoring and report generator |
-| `dashboard` | Streamlit UI that runs the four local analyzers |
+| `05-ml-anomaly-detection` | IsolationForest anomaly detection for synthetic security logs |
+| `dashboard` | Streamlit UI that runs the local analyzers |
 | `docs` | Portfolio documentation, testing guide, mappings, and walkthroughs |
 | `run_all_tests.py` | Repo-wide test runner |
 
@@ -56,9 +57,17 @@ Batch mode uses `--batch` to process every JSON file in the project's `sample-in
 
 This design keeps batch processing predictable and prevents reports from being written to arbitrary locations.
 
+## How The ML Anomaly Detection Module Works
+
+The ML anomaly detection module reads synthetic CSV security logs from `05-ml-anomaly-detection/sample-inputs`. It validates required columns, converts security features into numeric values, derives an MFA failure feature, scales the feature set, and trains scikit-learn `IsolationForest`.
+
+The output is a Markdown report with total events, anomaly count, top suspicious events, anomaly scores, reasons for suspicion, recommended SOC triage steps, MITRE ATT&CK mapping, and limitations. The `expected_is_anomaly` column exists for testing and discussion only; it is not used as a model feature.
+
+This is a synthetic lab model, not a production detection model.
+
 ## How The Dashboard Works
 
-The Streamlit dashboard in `dashboard/app.py` provides a simple browser interface over the four local analyzers. It uses a fixed project mapping, lists JSON files only from the selected project's `sample-inputs` folder, and runs the matching analyzer script locally.
+The Streamlit dashboard in `dashboard/app.py` provides a simple browser interface over the local analyzers. It uses a fixed project mapping, lists sample files only from the selected project's `sample-inputs` folder, and runs the matching analyzer script locally.
 
 The dashboard displays the generated Markdown report and raw Markdown. It uses safe error handling for invalid selections, missing scripts, analyzer failures, and timeouts.
 

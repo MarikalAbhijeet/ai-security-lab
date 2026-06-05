@@ -24,25 +24,25 @@ def main() -> None:
     project = PROJECTS[project_name]
     st.write(project.description)
     st.warning(
-        "Use fake/sample JSON only. Do not upload real secrets, passwords, tokens, "
-        "company data, client data, or vendor confidential data."
+        "Use fake/sample data only. Do not upload real secrets, passwords, tokens, "
+        "company data, client data, tenant data, or vendor confidential data."
     )
 
-    input_mode = st.radio(
-        "Input source",
-        options=["Use sample JSON", "Upload custom JSON"],
-        horizontal=True,
-    )
+    input_options = [f"Use sample {project.sample_extension.upper().lstrip('.')}"]
+    if project.upload_enabled:
+        input_options.append("Upload custom JSON")
+
+    input_mode = st.radio("Input source", options=input_options, horizontal=True)
 
     report = None
 
-    if input_mode == "Use sample JSON":
+    if input_mode.startswith("Use sample"):
         sample_files = list_sample_files(project)
         if not sample_files:
-            st.error("No sample JSON files were found for this project.")
+            st.error("No sample files were found for this project.")
             return
 
-        selected_sample = st.selectbox("Sample input JSON", options=[path.name for path in sample_files])
+        selected_sample = st.selectbox("Sample input file", options=[path.name for path in sample_files])
 
         with st.expander("Sample file path", expanded=False):
             st.code(str(project.sample_input_dir / selected_sample), language="text")
