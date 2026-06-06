@@ -5,7 +5,7 @@
 ![Security](https://img.shields.io/badge/Focus-AI%20Security%20%7C%20SOC-green)
 ![Portfolio](https://img.shields.io/badge/Portfolio-Security%20Lab-purple)
 
-AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, AI vendor risk review, synthetic ML anomaly detection, and a local-first Security Copilot using safe local sample data.
+AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, AI vendor risk review, synthetic ML anomaly detection, and a local-first Security Copilot experience using safe local sample data.
 
 The lab reflects a profile focused on Security Operations, Microsoft Defender, Microsoft Sentinel, Entra ID / IAM, Cloud Security, Python automation, and AI Security. Each tool starts with simple rule-based logic so the workflows are easy to review, extend, and explain.
 
@@ -118,7 +118,7 @@ python -m pip install -r requirements.txt
 python .\anomaly_detector.py --input .\sample-inputs\synthetic_signin_logs.csv --output .\sample-output\anomaly_report.md
 ```
 
-### Security Copilot Chat
+### Local SecOps Copilot
 
 ```powershell
 cd .\security_copilot
@@ -139,7 +139,15 @@ Batch mode for Projects 1-4 processes every JSON file in the project's `sample-i
 
 ## Dashboard
 
-A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose a project, use an included fake/sample input file, run the matching analyzer, and view the generated Markdown report in the browser. Projects 1-4 also support custom fake/sample JSON uploads in the dashboard; Project 5 uses the included synthetic CSV sample. The dashboard also includes a Security Copilot Chat tab with chat history, answer modes, retrieved-source controls, local Ollama provider status, setup guidance, and cited local sources.
+The Streamlit dashboard is branded as **AI Security Command Center** and is available in [`dashboard/`](dashboard/README.md). It lets you choose a project, use an included fake/sample input file, run the matching analyzer, and view the generated Markdown report in the browser. Projects 1-4 also support custom fake/sample JSON uploads in the dashboard; Project 5 uses the included synthetic CSV sample.
+
+The dashboard includes:
+
+- `Security Analysis Modules` for analyzer reports.
+- `Local SecOps Copilot` for local Ollama-powered, source-cited questions over repository documentation and sample lab files.
+- Compact Ollama readiness status with detailed provider diagnostics hidden under `Provider Debug Details`.
+- Example Copilot prompt buttons, a visible local-model loading panel, and a Clear chat control.
+- Advanced retrieval settings hidden by default so normal demo users are not distracted by tuning controls.
 
 Recommended Windows startup from the repository root:
 
@@ -191,7 +199,7 @@ GitHub Actions runs the full test suite on push and pull request using `.github/
 
 All data in this repository is fake/sample data only. Do not add real company data, real client data, real vendor confidential data, secrets, passwords, tokens, API keys, private documents, internal policies, or production logs.
 
-The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, paid APIs, or live security systems. Security Copilot can call only a local Ollama instance on the configured local URL and includes mock mode for tests. Do not add real tenant, user, client, company, vendor, or production telemetry to the ML anomaly detection module or Security Copilot Chat.
+The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Exchange Online, Freshservice, vendor portals, paid APIs, or live security systems. Local SecOps Copilot can call only a local Ollama instance on the configured local URL and includes mock mode for tests. Do not add real tenant, user, client, company, vendor, or production telemetry to the ML anomaly detection module or Local SecOps Copilot.
 
 ## Documentation
 

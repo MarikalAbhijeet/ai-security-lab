@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -27,13 +28,25 @@ from copilot_assistant import ANSWER_MODES, answer_question, render_markdown  # 
 from ollama_client import SETUP_INSTRUCTIONS, check_ollama_status  # noqa: E402
 
 
+EXAMPLE_PROMPTS = {
+    "Investigate risky sign-in": "What should an analyst check when investigating a risky sign-in?",
+    "Generate suspicious PowerShell KQL": "What KQL should I use to hunt for suspicious PowerShell activity?",
+    "Review phishing response steps": "What response steps should an analyst take for a suspected phishing email?",
+    "Explain prompt injection controls": "How does prompt injection map to OWASP LLM Top 10, and what controls help?",
+    "Review AI vendor risk": "What questions should we ask an AI vendor before approval?",
+}
+
+
 def main() -> None:
-    st.set_page_config(page_title="AI Security Lab Dashboard", layout="wide")
+    st.set_page_config(page_title="AI Security Command Center", layout="wide")
 
-    st.title("AI Security Lab Dashboard")
-    st.caption("Local-only dashboard for fake/sample security lab data. No paid APIs or live systems are used.")
+    st.title("AI Security Command Center")
+    st.caption(
+        "Local-first AI/ML security operations platform using Ollama, RAG, ML anomaly detection, "
+        "and sample SOC workflows."
+    )
 
-    reports_tab, copilot_tab = st.tabs(["Project Reports", "Security Copilot Chat"])
+    reports_tab, copilot_tab = st.tabs(["Security Analysis Modules", "Local SecOps Copilot"])
 
     with reports_tab:
         render_project_reports()
@@ -102,11 +115,14 @@ def render_project_reports() -> None:
 
 
 def render_copilot_chat() -> None:
-    st.subheader("Security Copilot Chat")
-    st.write("Ask questions about this repository's local documentation, sample reports, and framework notes.")
+    st.subheader("Local SecOps Copilot")
+    st.write(
+        "Ask source-cited questions across the local AI Security Lab docs, sample reports, framework notes, "
+        "and safe lab data. The Copilot uses local Ollama for answer generation and local RAG retrieval for context."
+    )
     st.warning(
         "Do not enter real secrets, passwords, tokens, company data, client data, tenant data, "
-        "or vendor confidential data. Answers use local lab files only."
+        "or vendor confidential data. Answers use fake/sample lab files only."
     )
 
     try:
@@ -116,16 +132,8 @@ def render_copilot_chat() -> None:
         st.error(str(error))
         return
 
-    status_label = "Ready" if not status.setup_required else "Setup required"
-    st.info(f"Provider: {status.provider} | Model: {status.model} | Status: {status_label}")
-    with st.expander("Provider debug status", expanded=False):
-        st.write(f"- Provider: `{status.provider}`")
-        st.write(f"- Model: `{status.model}`")
-        st.write(f"- Ollama API reachable: `{status.reachable}`")
-        st.write(f"- Model installed: `{status.model_installed}`")
-        st.write(f"- Timeout seconds: `{status.generation_timeout_seconds}`")
-        st.write(f"- Health timeout seconds: `{status.health_timeout_seconds}`")
-        st.write(f"- Last error: `{status.last_error or 'None'}`")
+    render_provider_status(status)
+
     if status.setup_required and not config.uses_mock:
         st.warning(status.message)
         st.code(SETUP_INSTRUCTIONS, language="text")
@@ -133,10 +141,17 @@ def render_copilot_chat() -> None:
     if "copilot_messages" not in st.session_state:
         st.session_state["copilot_messages"] = []
 
-    controls_left, controls_right = st.columns([3, 1])
+    controls_left, controls_right = st.columns([4, 1])
     with controls_left:
         answer_mode = st.selectbox("Answer mode", options=ANSWER_MODES, index=0)
-        top_k = st.slider("Retrieved sources", min_value=1, max_value=10, value=5)
+        with st.expander("Advanced Settings", expanded=False):
+            top_k = st.slider(
+                "Retrieved sources",
+                min_value=1,
+                max_value=10,
+                value=5,
+                help="Higher values may improve context but can slow local model responses.",
+            )
     with controls_right:
         st.write("")
         st.write("")
@@ -144,29 +159,41 @@ def render_copilot_chat() -> None:
             st.session_state["copilot_messages"] = []
             st.rerun()
 
+    st.markdown("**Example prompts**")
+    prompt_columns = st.columns(len(EXAMPLE_PROMPTS))
+    for column, (label, prompt) in zip(prompt_columns, EXAMPLE_PROMPTS.items()):
+        with column:
+            if st.button(label, use_container_width=True):
+                st.session_state["pending_copilot_question"] = prompt
+                st.rerun()
+
     for message in st.session_state["copilot_messages"]:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            if message.get("sources"):
+            if message["role"] == "assistant" and message.get("result"):
+                render_copilot_answer_card(message["result"])
+            else:
+                st.markdown(message["content"])
+            if message.get("sources") and not message.get("result"):
                 with st.expander("Retrieved source files"):
-                    for source in message["sources"]:
-                        st.write(f"- `{source['path']}` (score: {source['score']})")
+                    render_source_list(message["sources"])
 
-    question = st.chat_input("Ask about the local AI Security Lab documentation")
+    question = st.session_state.pop("pending_copilot_question", None)
+    chat_question = st.chat_input("Ask Local SecOps Copilot about the AI Security Lab")
+    if chat_question:
+        question = chat_question
+
     if question:
         st.session_state["copilot_messages"].append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.markdown(question)
 
         try:
-            result = answer_question(
-                question,
+            result = generate_copilot_answer(
+                question=question,
                 answer_mode=answer_mode,
-                index_root=Path(REPO_ROOT),
                 top_k=top_k,
                 config=config,
             )
-            markdown = render_markdown(result)
         except ValueError as error:
             st.error(str(error))
             return
@@ -177,21 +204,130 @@ def render_copilot_chat() -> None:
         elif result.get("timed_out"):
             st.warning(result["answer"])
 
-        history_content = "\n\n".join(
-            [
-                result["answer"],
-                f"**Retrieval confidence:** {result['retrieval_confidence']}",
-                result["safety_note"],
-            ]
-        )
+        history_content = build_history_summary(result)
         st.session_state["copilot_messages"].append(
-            {"role": "assistant", "content": history_content, "sources": result["sources"]}
+            {
+                "role": "assistant",
+                "content": history_content,
+                "sources": result["sources"],
+                "result": result,
+            }
         )
         with st.chat_message("assistant"):
-            st.markdown(markdown)
-            with st.expander("Retrieved source files"):
-                for source in result["sources"]:
-                    st.write(f"- `{source['path']}` (score: {source['score']})")
+            render_copilot_answer_card(result)
+
+
+def render_provider_status(status) -> None:
+    """Render compact provider status plus hidden debug details."""
+    status_text = "Ollama Ready" if not status.setup_required else "Ollama Setup Required"
+    mode_text = "Local Mode" if status.provider == "ollama" else "Test Mode"
+    status_icon = "OK" if not status.setup_required else "Action needed"
+
+    with st.container(border=True):
+        st.markdown(f"**{status_text} | {status.model} | {mode_text}**")
+        st.caption(status_icon)
+
+    with st.expander("Provider Debug Details", expanded=False):
+        st.write(f"- Provider: `{status.provider}`")
+        st.write(f"- Model: `{status.model}`")
+        st.write(f"- Ollama API reachable: `{status.reachable}`")
+        st.write(f"- Model installed: `{status.model_installed}`")
+        st.write(f"- Timeout seconds: `{status.generation_timeout_seconds}`")
+        st.write(f"- Health timeout seconds: `{status.health_timeout_seconds}`")
+        st.write(f"- Last error: `{status.last_error or 'None'}`")
+
+
+def generate_copilot_answer(question: str, answer_mode: str, top_k: int, config: object) -> dict:
+    """Generate an answer while displaying a clear local-model loading state."""
+    start_time = time.monotonic()
+    loading_panel = st.empty()
+
+    with loading_panel.container(border=True):
+        st.markdown("**Generating local AI response with Ollama...**")
+        st.write(f"Model: `{config.ollama_model}`")
+        st.caption("This can take 30-90 seconds on local laptops.")
+        st.caption("Status: retrieving local context and waiting for the local model response.")
+        with st.spinner("Local SecOps Copilot is thinking..."):
+            result = answer_question(
+                question,
+                answer_mode=answer_mode,
+                index_root=Path(REPO_ROOT),
+                top_k=top_k,
+                config=config,
+            )
+
+        elapsed_seconds = time.monotonic() - start_time
+        st.success(f"Local response ready in {elapsed_seconds:.1f} seconds.")
+
+    return result
+
+
+def render_copilot_answer_card(result: dict) -> None:
+    """Render the Copilot answer in a product-style card."""
+    with st.container(border=True):
+        st.markdown("### Answer")
+        st.markdown(result["answer"])
+
+        st.markdown("### Recommended Next Steps")
+        for index, step in enumerate(result["recommended_next_steps"], start=1):
+            st.markdown(f"{index}. {step}")
+
+        st.markdown("### Local Sources Used")
+        render_source_list(result["sources"])
+
+        st.markdown("### Guardrail Result")
+        st.markdown(f"- Allowed: `{result['guardrails']['allowed']}`")
+        warnings = result["guardrails"]["warnings"] or ["No guardrail warnings."]
+        for warning in warnings:
+            st.markdown(f"- {warning}")
+
+        st.markdown("### Provider")
+        st.markdown(
+            "\n".join(
+                [
+                    f"- Provider: `{result['provider']}`",
+                    f"- Model: `{result['model']}`",
+                    f"- Setup required: `{result['setup_required']}`",
+                    f"- Timed out: `{result['timed_out']}`",
+                    f"- Status: {result['provider_message']}",
+                ]
+            )
+        )
+
+        st.markdown("### Retrieval Confidence")
+        st.markdown(result["retrieval_confidence"])
+
+        st.markdown("### Limitations")
+        for limitation in result["limitations"]:
+            st.markdown(f"- {limitation}")
+
+        st.markdown("### Safety Note")
+        st.markdown(result["safety_note"])
+
+    with st.expander("Raw Markdown Report", expanded=False):
+        st.code(render_markdown(result), language="markdown")
+
+
+def render_source_list(sources: list[dict]) -> None:
+    """Render retrieved local sources as readable bullets."""
+    if not sources:
+        st.write("No local sources used.")
+        return
+
+    for source in sources:
+        heading = source.get("heading") or "Untitled section"
+        st.markdown(f"- `{source['path']}` - {heading} (score: {source['score']})")
+
+
+def build_history_summary(result: dict) -> str:
+    """Build compact content for chat history state."""
+    return "\n\n".join(
+        [
+            result["answer"],
+            f"**Retrieval confidence:** {result['retrieval_confidence']}",
+            result["safety_note"],
+        ]
+    )
 
 
 if __name__ == "__main__":
