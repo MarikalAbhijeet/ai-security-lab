@@ -29,7 +29,15 @@ py -3 -m pip install -r .\dashboard\requirements.txt
 
 ## Run
 
-From the repository root:
+Recommended Windows startup from the repository root:
+
+```powershell
+.\start-dashboard.ps1
+```
+
+The launcher sets the local Security Copilot environment variables, checks Ollama, pulls `qwen2.5:3b` if needed, preloads the model, and starts Streamlit.
+
+Manual fallback from the repository root:
 
 ```powershell
 python -m streamlit run .\dashboard\app.py
@@ -80,7 +88,9 @@ The chat tab uses the `security_copilot` module. It shows:
 - Answer mode selection
 - Retrieved source count selection
 - Chat-style message history
+- Clear chat button
 - Local source citations
+- Provider debug fields for API reachability, model installation, timeout settings, and last error
 
 Default local model setup:
 

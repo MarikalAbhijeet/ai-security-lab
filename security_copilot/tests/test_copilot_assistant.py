@@ -19,6 +19,8 @@ class CopilotAssistantTests(unittest.TestCase):
 
         self.assertEqual(config.provider, "ollama")
         self.assertEqual(config.ollama_model, "qwen2.5:3b")
+        self.assertEqual(config.ollama_timeout_seconds, 180)
+        self.assertEqual(config.ollama_health_timeout_seconds, 10)
         self.assertFalse(config.test_mode)
 
     def test_invalid_provider_is_rejected(self):
@@ -28,6 +30,10 @@ class CopilotAssistantTests(unittest.TestCase):
     def test_non_loopback_ollama_url_is_rejected(self):
         with self.assertRaises(ValueError):
             load_config({"OLLAMA_BASE_URL": "https://example.test:11434"})
+
+    def test_invalid_timeout_is_rejected(self):
+        with self.assertRaises(ValueError):
+            load_config({"OLLAMA_TIMEOUT_SECONDS": "0"})
 
     def test_mock_mode_answer_includes_sources_and_safety_note(self):
         config = CopilotConfig(provider="mock", test_mode=True)

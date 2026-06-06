@@ -15,6 +15,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MAX_UPLOAD_BYTES = 1_000_000
 MAX_REPORT_CHARS = 60_000
+ANALYZER_SUBPROCESS_TIMEOUT_SECONDS = 20
 
 
 @dataclass(frozen=True)
@@ -183,7 +184,7 @@ def run_analyzer_for_sample(project: ProjectConfig, sample_path: Path) -> str:
             cwd=project.project_dir,
             capture_output=True,
             text=True,
-            timeout=20,
+            timeout=ANALYZER_SUBPROCESS_TIMEOUT_SECONDS,
             check=False,
         )
     except subprocess.TimeoutExpired as error:

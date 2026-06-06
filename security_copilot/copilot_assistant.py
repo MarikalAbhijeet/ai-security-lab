@@ -55,12 +55,20 @@ def answer_question(question: str, answer_mode="SOC Analyst", top_k=5, index_roo
         answer = "I do not have enough local AI Security Lab context to answer that question confidently."
         setup_required = False
     else:
-        llm_response = chat(config, guardrail.sanitized_question, answer_mode, context)
+        llm_response = chat(config, guardrail.sanitized_question, answer_mode, context, status=status)
         answer = llm_response.answer
         setup_required = llm_response.setup_required
+        timed_out = llm_response.timed_out
+        generation_error = llm_response.last_error
+
+    if not chunks or (chunks and chunks[0].score < 0.03):
+        timed_out = False
+        generation_error = ""
 
     if setup_required and not config.uses_mock:
         next_steps = ["Start Ollama locally.", "Run `ollama pull qwen2.5:3b`.", "Run `ollama run qwen2.5:3b`.", "Ask the question again."]
+    elif timed_out:
+        next_steps = ["Ask the question again.", "Reduce retrieved sources.", "Confirm the local model has finished loading.", "Consider a smaller local model if the workstation is resource constrained."]
     else:
         next_steps = default_next_steps(answer_mode)
 
@@ -73,6 +81,8 @@ def answer_question(question: str, answer_mode="SOC Analyst", top_k=5, index_roo
         sources=source_citations,
         retrieval_confidence=retrieval_confidence,
         setup_required=setup_required,
+        timed_out=timed_out,
+        generation_error=generation_error,
         next_steps=next_steps,
         limitations=[
             "Uses local AI Security Lab documentation and sample files only.",
@@ -80,6 +90,7 @@ def answer_question(question: str, answer_mode="SOC Analyst", top_k=5, index_roo
             "Do not use this lab with real company, client, tenant, vendor, or production data.",
         ],
         provider_message=status.message,
+        provider_status=status,
     )
 
 
@@ -105,8 +116,34 @@ def build_result(**kwargs) -> dict:
         "provider": "mock" if config.uses_mock else config.provider,
         "model": config.ollama_model,
         "setup_required": kwargs["setup_required"],
+        "timed_out": kwargs.get("timed_out", False),
         "provider_message": kwargs.get("provider_message", ""),
+        "provider_status": format_provider_status(kwargs.get("provider_status"), config),
+        "generation_error": kwargs.get("generation_error", ""),
         "retrieval_confidence": kwargs["retrieval_confidence"],
+    }
+
+
+def format_provider_status(status, config: CopilotConfig) -> dict:
+    """Return dashboard-friendly provider status details."""
+    if status is None:
+        return {
+            "provider": "mock" if config.uses_mock else config.provider,
+            "model": config.ollama_model,
+            "ollama_api_reachable": False,
+            "model_installed": False,
+            "health_timeout_seconds": config.ollama_health_timeout_seconds,
+            "generation_timeout_seconds": config.ollama_timeout_seconds,
+            "last_error": "",
+        }
+    return {
+        "provider": status.provider,
+        "model": status.model,
+        "ollama_api_reachable": status.reachable,
+        "model_installed": status.model_installed,
+        "health_timeout_seconds": status.health_timeout_seconds,
+        "generation_timeout_seconds": status.generation_timeout_seconds,
+        "last_error": status.last_error,
     }
 
 
@@ -148,7 +185,7 @@ def render_markdown(result: dict) -> str:
             "## Guardrail Result",
             f"- Allowed: {result['guardrails']['allowed']}\n{warnings}",
             "## Provider",
-            f"- Provider: {result['provider']}\n- Model: {result['model']}\n- Setup required: {result['setup_required']}\n- Status: {result['provider_message']}",
+            f"- Provider: {result['provider']}\n- Model: {result['model']}\n- Setup required: {result['setup_required']}\n- Timed out: {result['timed_out']}\n- Status: {result['provider_message']}",
             "## Retrieval Confidence",
             result["retrieval_confidence"],
             "## Limitations",

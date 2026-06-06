@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -31,8 +32,12 @@ class ProviderStatus:
     provider: str
     model: str
     reachable: bool
+    model_installed: bool
     setup_required: bool
     message: str
+    health_timeout_seconds: int
+    generation_timeout_seconds: int
+    last_error: str = ""
 
 
 @dataclass(frozen=True)
@@ -43,12 +48,23 @@ class LLMResponse:
     provider: str
     model: str
     setup_required: bool = False
+    timed_out: bool = False
+    last_error: str = ""
 
 
 def provider_status(config: CopilotConfig) -> ProviderStatus:
     """Return provider health without logging secrets."""
     if config.uses_mock:
-        return ProviderStatus("mock", config.ollama_model, True, False, "Mock provider enabled for tests.")
+        return ProviderStatus(
+            provider="mock",
+            model=config.ollama_model,
+            reachable=True,
+            model_installed=True,
+            setup_required=False,
+            message="Mock provider enabled for tests.",
+            health_timeout_seconds=config.ollama_health_timeout_seconds,
+            generation_timeout_seconds=config.ollama_timeout_seconds,
+        )
 
     return ollama_health(config)
 
@@ -61,15 +77,22 @@ def check_ollama_status(config: CopilotConfig) -> ProviderStatus:
 def ollama_health(config: CopilotConfig) -> ProviderStatus:
     """Check Ollama health and configured model availability."""
     try:
-        with urllib.request.urlopen(f"{config.ollama_base_url}/api/tags", timeout=2) as response:
+        with urllib.request.urlopen(
+            f"{config.ollama_base_url}/api/tags",
+            timeout=config.ollama_health_timeout_seconds,
+        ) as response:
             data = json.loads(response.read().decode("utf-8"))
-    except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, TimeoutError) as error:
         return ProviderStatus(
             provider="ollama",
             model=config.ollama_model,
             reachable=False,
+            model_installed=False,
             setup_required=True,
             message=f"{SETUP_INSTRUCTIONS}\n\nDetail: {error}",
+            health_timeout_seconds=config.ollama_health_timeout_seconds,
+            generation_timeout_seconds=config.ollama_timeout_seconds,
+            last_error=str(error),
         )
 
     models = {item.get("name", "") for item in data.get("models", [])}
@@ -78,18 +101,30 @@ def ollama_health(config: CopilotConfig) -> ProviderStatus:
             provider="ollama",
             model=config.ollama_model,
             reachable=True,
+            model_installed=False,
             setup_required=True,
             message=f"Configured Ollama model `{config.ollama_model}` was not found. Run `ollama pull {config.ollama_model}`.",
+            health_timeout_seconds=config.ollama_health_timeout_seconds,
+            generation_timeout_seconds=config.ollama_timeout_seconds,
         )
-    return ProviderStatus("ollama", config.ollama_model, True, False, f"Ollama reachable with model `{config.ollama_model}`.")
+    return ProviderStatus(
+        provider="ollama",
+        model=config.ollama_model,
+        reachable=True,
+        model_installed=True,
+        setup_required=False,
+        message=f"Ollama reachable with model `{config.ollama_model}`.",
+        health_timeout_seconds=config.ollama_health_timeout_seconds,
+        generation_timeout_seconds=config.ollama_timeout_seconds,
+    )
 
 
-def chat(config: CopilotConfig, question: str, answer_mode: str, context: str) -> LLMResponse:
+def chat(config: CopilotConfig, question: str, answer_mode: str, context: str, status: ProviderStatus | None = None) -> LLMResponse:
     """Generate an answer with mock mode or local Ollama."""
     if config.uses_mock:
         return LLMResponse(mock_answer(question, answer_mode, context), "mock", config.ollama_model)
 
-    status = provider_status(config)
+    status = status or provider_status(config)
     if status.setup_required:
         return LLMResponse(status.message, "ollama", config.ollama_model, setup_required=True)
 
@@ -108,15 +143,34 @@ def chat(config: CopilotConfig, question: str, answer_mode: str, context: str) -
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
+        with urllib.request.urlopen(request, timeout=config.ollama_timeout_seconds) as response:
             data = json.loads(response.read().decode("utf-8"))
-    except (OSError, urllib.error.URLError, json.JSONDecodeError) as error:
+    except (socket.timeout, TimeoutError) as error:
+        return LLMResponse(timeout_message(), "ollama", config.ollama_model, timed_out=True, last_error=str(error))
+    except (OSError, urllib.error.URLError) as error:
+        if is_timeout_error(error):
+            return LLMResponse(timeout_message(), "ollama", config.ollama_model, timed_out=True, last_error=str(error))
         return LLMResponse(f"{SETUP_INSTRUCTIONS} Detail: {error}", "ollama", config.ollama_model, setup_required=True)
+    except json.JSONDecodeError as error:
+        return LLMResponse(f"Ollama returned an unreadable response. Detail: {error}", "ollama", config.ollama_model, last_error=str(error))
 
     answer = data.get("message", {}).get("content", "").strip()
     if not answer:
         answer = "Ollama returned an empty response. Review local setup and try again."
     return LLMResponse(answer, "ollama", config.ollama_model)
+
+
+def timeout_message() -> str:
+    """Return user-facing guidance for slow local model responses."""
+    return (
+        "Ollama is running, but the model response timed out. The model may still be loading or your system may be slow. "
+        "Try again, reduce retrieved sources, or use a smaller model."
+    )
+
+
+def is_timeout_error(error: BaseException) -> bool:
+    """Return True when urllib wrapped a timeout-like error."""
+    return "timed out" in str(error).lower()
 
 
 def build_user_prompt(question: str, answer_mode: str, context: str) -> str:

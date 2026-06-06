@@ -66,6 +66,18 @@ Each project can run from its own folder using local samples. Projects 1-4 use J
 
 On Windows, use `py -3` if `python` is not available.
 
+### One-Command Local Start
+
+On Windows, start the full dashboard and configure the Ollama-powered Security Copilot with:
+
+```powershell
+.\start-dashboard.ps1
+```
+
+The launcher sets the local Copilot environment variables, checks Ollama at `http://localhost:11434`, pulls `qwen2.5:3b` if needed, preloads the model, and starts Streamlit. See [docs/local_startup_guide.md](docs/local_startup_guide.md) for setup and troubleshooting.
+
+Security Copilot requires Ollama for real local AI answers. The default model is `qwen2.5:3b`; if Ollama or the model is unavailable, the dashboard shows setup-required guidance instead of silently falling back to mock mode.
+
 ### Project 1: SOC Alert Triage Assistant
 
 ```powershell
@@ -129,15 +141,16 @@ Batch mode for Projects 1-4 processes every JSON file in the project's `sample-i
 
 A simple Streamlit dashboard is available in [`dashboard/`](dashboard/README.md). It lets you choose a project, use an included fake/sample input file, run the matching analyzer, and view the generated Markdown report in the browser. Projects 1-4 also support custom fake/sample JSON uploads in the dashboard; Project 5 uses the included synthetic CSV sample. The dashboard also includes a Security Copilot Chat tab with chat history, answer modes, retrieved-source controls, local Ollama provider status, setup guidance, and cited local sources.
 
-Install the dashboard dependency from the repository root:
+Recommended Windows startup from the repository root:
+
+```powershell
+.\start-dashboard.ps1
+```
+
+Manual fallback from the repository root:
 
 ```powershell
 python -m pip install -r .\dashboard\requirements.txt
-```
-
-Run the dashboard from the repository root:
-
-```powershell
 python -m streamlit run .\dashboard\app.py
 ```
 
@@ -187,6 +200,7 @@ The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Ex
 - [Framework mapping](docs/framework_mapping.md)
 - [Demo walkthrough](docs/demo_walkthrough.md)
 - [Testing guide](docs/testing_guide.md)
+- [Local startup guide](docs/local_startup_guide.md)
 
 ## Future Roadmap
 

@@ -118,15 +118,31 @@ def render_copilot_chat() -> None:
 
     status_label = "Ready" if not status.setup_required else "Setup required"
     st.info(f"Provider: {status.provider} | Model: {status.model} | Status: {status_label}")
+    with st.expander("Provider debug status", expanded=False):
+        st.write(f"- Provider: `{status.provider}`")
+        st.write(f"- Model: `{status.model}`")
+        st.write(f"- Ollama API reachable: `{status.reachable}`")
+        st.write(f"- Model installed: `{status.model_installed}`")
+        st.write(f"- Timeout seconds: `{status.generation_timeout_seconds}`")
+        st.write(f"- Health timeout seconds: `{status.health_timeout_seconds}`")
+        st.write(f"- Last error: `{status.last_error or 'None'}`")
     if status.setup_required and not config.uses_mock:
         st.warning(status.message)
         st.code(SETUP_INSTRUCTIONS, language="text")
 
-    answer_mode = st.selectbox("Answer mode", options=ANSWER_MODES, index=0)
-    top_k = st.slider("Retrieved sources", min_value=1, max_value=10, value=5)
-
     if "copilot_messages" not in st.session_state:
         st.session_state["copilot_messages"] = []
+
+    controls_left, controls_right = st.columns([3, 1])
+    with controls_left:
+        answer_mode = st.selectbox("Answer mode", options=ANSWER_MODES, index=0)
+        top_k = st.slider("Retrieved sources", min_value=1, max_value=10, value=5)
+    with controls_right:
+        st.write("")
+        st.write("")
+        if st.button("Clear chat"):
+            st.session_state["copilot_messages"] = []
+            st.rerun()
 
     for message in st.session_state["copilot_messages"]:
         with st.chat_message(message["role"]):
@@ -158,6 +174,8 @@ def render_copilot_chat() -> None:
         if result["setup_required"]:
             st.warning("Ollama setup is required before local LLM answers are available.")
             st.code(SETUP_INSTRUCTIONS, language="text")
+        elif result.get("timed_out"):
+            st.warning(result["answer"])
 
         history_content = "\n\n".join(
             [
