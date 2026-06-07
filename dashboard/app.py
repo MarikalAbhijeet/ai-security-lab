@@ -37,9 +37,10 @@ from evidence_summarizer import analyze_evidence  # noqa: E402
 EXAMPLE_PROMPTS = {
     "Investigate risky sign-in": "What should an analyst check when investigating a risky sign-in?",
     "Generate suspicious PowerShell KQL": "What KQL should I use to hunt for suspicious PowerShell activity?",
-    "Review phishing response steps": "What response steps should an analyst take for a suspected phishing email?",
-    "Explain prompt injection controls": "How does prompt injection map to OWASP LLM Top 10, and what controls help?",
-    "Review AI vendor risk": "What questions should we ask an AI vendor before approval?",
+    "Create phishing ticket note": "Create a Freshservice-style ticket note for a phishing investigation.",
+    "Review malware alert": "How should I investigate a Defender malware alert?",
+    "Explain impossible travel escalation": "When should an impossible travel alert be escalated?",
+    "Analyze uploaded evidence IOCs": "Based on the uploaded evidence, list the IOCs and tell me what a SOC analyst should investigate first.",
 }
 
 
@@ -49,8 +50,9 @@ def main() -> None:
     st.title("AI Security Command Center")
     st.caption(
         "Local-first AI/ML security operations platform using Ollama, RAG, ML anomaly detection, "
-        "and sample SOC workflows."
+        "evidence analysis, IOC extraction, and SOC automation."
     )
+    render_command_center_status()
 
     reports_tab, evidence_tab, copilot_tab = st.tabs(
         ["Security Analysis Modules", "Threat Evidence Workbench", "Local SecOps Copilot"]
@@ -125,6 +127,23 @@ def render_project_reports() -> None:
             st.code(report, language="markdown")
 
 
+def render_command_center_status() -> None:
+    """Render product status cards at the top of the dashboard."""
+    cards = [
+        ("Local LLM", "Ollama"),
+        ("Model", "qwen2.5:3b"),
+        ("Evidence Analysis", "Enabled"),
+        ("IOC Extraction", "Enabled"),
+        ("Playbook Library", "Enabled"),
+    ]
+    columns = st.columns(len(cards))
+    for column, (label, value) in zip(columns, cards):
+        with column:
+            with st.container(border=True):
+                st.caption(label)
+                st.markdown(f"**{value}**")
+
+
 def render_threat_evidence_workbench() -> None:
     """Render local-only uploaded evidence analysis."""
     st.subheader("Threat Evidence Workbench")
@@ -145,13 +164,33 @@ def render_threat_evidence_workbench() -> None:
     )
 
     if uploaded_file is None:
+        st.session_state.pop("last_evidence_upload_id", None)
         st.info("Upload a fake/sample evidence file to generate a local report.")
         return
+
+    upload_id = f"{uploaded_file.name}:{uploaded_file.size}"
+    if st.session_state.get("last_evidence_upload_id") != upload_id:
+        st.session_state["last_evidence_upload_id"] = upload_id
+        st.session_state.pop("evidence_analysis", None)
+        st.session_state.pop("copilot_session_context", None)
 
     st.write(f"Selected file: `{uploaded_file.name}`")
     st.caption("The uploaded file name is displayed for the current session only; the file is not written to disk.")
 
-    if st.button("Analyze evidence", type="primary"):
+    action_left, action_right = st.columns([1, 1])
+    with action_left:
+        analyze_clicked = st.button("Analyze evidence", type="primary")
+    with action_right:
+        clear_clicked = st.button("Clear uploaded evidence")
+
+    if clear_clicked:
+        st.session_state.pop("evidence_analysis", None)
+        st.session_state.pop("copilot_session_context", None)
+        st.session_state.pop("last_evidence_upload_id", None)
+        st.success("Cleared analyzed evidence and Copilot evidence context. The uploaded file was not saved.")
+        st.rerun()
+
+    if analyze_clicked:
         try:
             analysis = analyze_evidence(uploaded_file.name, uploaded_file.getvalue())
         except ValueError as error:
@@ -166,28 +205,143 @@ def render_threat_evidence_workbench() -> None:
     if not analysis:
         return
 
-    summary_left, summary_right = st.columns(2)
-    with summary_left:
-        st.metric("Detected Evidence Type", analysis.evidence_type)
-        st.metric("Total Records/Lines", analysis.total_items)
-    with summary_right:
-        st.metric("Severity Recommendation", analysis.severity)
-        st.metric("Suspicious Findings", len(analysis.findings))
+    iocs = get_analysis_iocs(analysis)
+    findings = get_analysis_findings(analysis)
+    risk_scores = get_analysis_risk_scores(analysis)
+    ioc_counts = get_analysis_ioc_counts(analysis)
+    profile = get_analysis_profile(analysis)
+
+    total_iocs = len(iocs)
+    high_risk_entities = len([score for score in risk_scores if getattr(score, "score", 0) >= 50])
+    summary_cards = st.columns(5)
+    summary_values = [
+        ("Records / Lines", getattr(analysis, "total_items", 0)),
+        ("Total IOCs", total_iocs),
+        ("High-Risk Entities", high_risk_entities),
+        ("Suspicious Behaviors", len(findings)),
+        ("Severity", getattr(analysis, "severity", "Unknown")),
+    ]
+    for column, (label, value) in zip(summary_cards, summary_values):
+        with column:
+            st.metric(label, value)
+
+    with st.container(border=True):
+        st.markdown("### Highest Priority Finding")
+        st.markdown(f"**{get_highest_priority_finding(analysis)}**")
+        st.caption(f"Evidence type: {getattr(analysis, 'evidence_type', 'Unknown evidence')}")
+
+    process_count = len({getattr(item, "display_value", "") for item in iocs if getattr(item, "type", "") in {"Process", "Parent Process"}})
+    ioc_metric_cards = st.columns(6)
+    ioc_metric_values = [
+        ("IPs", ioc_counts["total_ips"]),
+        ("URLs / Domains", ioc_counts["total_urls_domains"]),
+        ("Users", ioc_counts["total_users"]),
+        ("Devices", ioc_counts["total_devices"]),
+        ("Processes", process_count),
+        ("Command Indicators", ioc_counts["total_suspicious_command_indicators"]),
+    ]
+    for column, (label, value) in zip(ioc_metric_cards, ioc_metric_values):
+        with column:
+            st.metric(label, value)
+
+    chart_left, chart_right = st.columns(2)
+    with chart_left:
+        st.markdown("### IOC Counts")
+        st.bar_chart(
+            {
+                "Count": {
+                    "IPs": ioc_counts["total_ips"],
+                    "URLs/Domains": ioc_counts["total_urls_domains"],
+                    "Users": ioc_counts["total_users"],
+                    "Devices": ioc_counts["total_devices"],
+                    "Processes": process_count,
+                    "Command Indicators": ioc_counts["total_suspicious_command_indicators"],
+                }
+            }
+        )
+    with chart_right:
+        st.markdown("### Entity Risk Scores")
+        risk_chart = {getattr(score, "entity", "unknown")[:28]: getattr(score, "score", 0) for score in risk_scores[:8]}
+        if risk_chart:
+            st.bar_chart({"Risk Score": risk_chart})
+        else:
+            st.write("No entity risk scores were generated.")
+
+    entity_user_col, entity_device_col, entity_ip_col = st.columns(3)
+    with entity_user_col:
+        st.markdown("### Top Risky Users")
+        entity_rows = [
+            {
+                "Type": score.entity_type,
+                "Entity": score.entity,
+                "Score": score.score,
+                "Reasons": ", ".join(score.reasons[:8]),
+            }
+            for score in getattr(profile, "top_risky_users", [])[:8]
+        ]
+        if entity_rows:
+            st.dataframe(entity_rows, width="stretch", hide_index=True)
+        else:
+            st.write("No risky users scored.")
+    with entity_device_col:
+        st.markdown("### Top Risky Devices")
+        device_rows = [
+            {
+                "Entity": score.entity,
+                "Score": score.score,
+                "Reasons": ", ".join(score.reasons[:8]),
+            }
+            for score in getattr(profile, "top_risky_devices", [])[:8]
+        ]
+        if device_rows:
+            st.dataframe(device_rows, width="stretch", hide_index=True)
+        else:
+            st.write("No risky devices scored.")
+    with entity_ip_col:
+        st.markdown("### Top Risky IPs")
+        ip_rows = [
+            {
+                "Entity": score.entity,
+                "Score": score.score,
+                "Reasons": ", ".join(score.reasons[:8]),
+            }
+            for score in getattr(profile, "top_risky_ips", [])[:8]
+        ]
+        if ip_rows:
+            st.dataframe(ip_rows, width="stretch", hide_index=True)
+        else:
+            st.write("No risky IPs scored.")
+
+    with st.container():
+        st.markdown("### Detected Behaviors")
+        behavior_rows = [
+            {
+                "Behavior": finding.title,
+                "Severity": finding.severity,
+                "MITRE ATT&CK": finding.mitre_attack,
+                "Recommended Review": finding.recommendation,
+            }
+            for finding in findings[:10]
+        ]
+        if behavior_rows:
+            st.dataframe(behavior_rows, width="stretch", hide_index=True)
+        else:
+            st.write("No suspicious behaviors detected.")
 
     st.markdown("### Indicators and Investigation Artifacts")
     st.caption("All sample IOCs shown here are fake/demo values. URLs, domains, and IP-like values are defanged for display.")
-    if analysis.iocs:
-        ioc_types = ["All"] + sorted({item.type for item in analysis.iocs})
+    if iocs:
+        ioc_types = ["All"] + sorted({getattr(item, "type", "") for item in iocs if getattr(item, "type", "")})
         selected_ioc_type = st.selectbox("IOC table filter", options=ioc_types, index=0)
-        visible_iocs = analysis.iocs if selected_ioc_type == "All" else [
-            item for item in analysis.iocs if item.type == selected_ioc_type
+        visible_iocs = iocs if selected_ioc_type == "All" else [
+            item for item in iocs if getattr(item, "type", "") == selected_ioc_type
         ]
         ioc_rows = [
             {
-                "Type": item.type,
-                "Value": item.display_value,
-                "Source / Context": item.source,
-                "Why It Matters": item.why_it_matters,
+                "Type": getattr(item, "type", "Unknown"),
+                "Value": getattr(item, "display_value", ""),
+                "Source / Context": getattr(item, "source", ""),
+                "Why It Matters": getattr(item, "why_it_matters", ""),
             }
             for item in visible_iocs[:50]
         ]
@@ -196,18 +350,18 @@ def render_threat_evidence_workbench() -> None:
         st.write("No IOCs or investigation artifacts were extracted by the local rule set.")
 
     with st.expander("IOC Summary Counts", expanded=False):
-        st.write(f"- Total IPs found: `{analysis.ioc_summary_counts['total_ips']}`")
-        st.write(f"- Total URLs/domains found: `{analysis.ioc_summary_counts['total_urls_domains']}`")
-        st.write(f"- Total users found: `{analysis.ioc_summary_counts['total_users']}`")
-        st.write(f"- Total devices found: `{analysis.ioc_summary_counts['total_devices']}`")
+        st.write(f"- Total IPs found: `{ioc_counts['total_ips']}`")
+        st.write(f"- Total URLs/domains found: `{ioc_counts['total_urls_domains']}`")
+        st.write(f"- Total users found: `{ioc_counts['total_users']}`")
+        st.write(f"- Total devices found: `{ioc_counts['total_devices']}`")
         st.write(
             "- Total suspicious command indicators found: "
-            f"`{analysis.ioc_summary_counts['total_suspicious_command_indicators']}`"
+            f"`{ioc_counts['total_suspicious_command_indicators']}`"
         )
 
     st.markdown("### Suspicious Findings")
-    if analysis.findings:
-        for finding in analysis.findings[:10]:
+    if findings:
+        for finding in findings[:10]:
             with st.container(border=True):
                 st.markdown(f"**{finding.title}** ({finding.severity})")
                 st.write(finding.description)
@@ -216,13 +370,13 @@ def render_threat_evidence_workbench() -> None:
         st.write("No suspicious findings were detected by the local rule set.")
 
     st.markdown("### Generated Evidence Report")
-    st.markdown(analysis.markdown_report)
+    st.markdown(getattr(analysis, "markdown_report", "No Markdown report was generated."))
     with st.expander("Raw Markdown Evidence Report", expanded=False):
-        st.code(analysis.markdown_report, language="markdown")
+        st.code(getattr(analysis, "markdown_report", ""), language="markdown")
 
     st.info("Local SecOps Copilot will receive only the summarized evidence context, not the raw uploaded file.")
     if st.button("Ask Local SecOps Copilot about this evidence"):
-        st.session_state["copilot_session_context"] = analysis.copilot_context
+        st.session_state["copilot_session_context"] = getattr(analysis, "copilot_context", "")
         st.session_state["pending_copilot_question"] = (
             "Analyze the uploaded evidence summary from the current session. "
             "What suspicious behavior should a SOC analyst prioritize?"
@@ -266,6 +420,12 @@ def render_copilot_chat() -> None:
             if st.button("Clear evidence context"):
                 st.session_state.pop("copilot_session_context", None)
                 st.rerun()
+        analysis = st.session_state.get("evidence_analysis")
+        if analysis:
+            with st.container(border=True):
+                st.markdown("**Evidence-aware mode active: using summarized uploaded evidence and extracted IOCs.**")
+                st.write(f"Evidence type: `{getattr(analysis, 'evidence_type', 'Unknown evidence')}`")
+                st.write(f"Highest priority: {get_highest_priority_finding(analysis)}")
 
     controls_left, controls_right = st.columns([4, 1])
     with controls_left:
@@ -278,11 +438,15 @@ def render_copilot_chat() -> None:
                 value=5,
                 help="Higher values may improve context but can slow local model responses.",
             )
+            latest_intent = st.session_state.get("copilot_latest_result", {}).get("detected_intent", "None")
+            st.write(f"Detected intent: `{latest_intent}`")
     with controls_right:
         st.write("")
         st.write("")
         if st.button("Clear chat"):
             st.session_state["copilot_messages"] = []
+            st.session_state.pop("copilot_latest_result", None)
+            st.session_state.pop("copilot_latest_question", None)
             st.rerun()
 
     st.markdown("**Example prompts**")
@@ -293,25 +457,18 @@ def render_copilot_chat() -> None:
                 st.session_state["pending_copilot_question"] = prompt
                 st.rerun()
 
-    for message in st.session_state["copilot_messages"]:
-        with st.chat_message(message["role"]):
-            if message["role"] == "assistant" and message.get("result"):
-                render_copilot_answer_card(message["result"])
-            else:
-                st.markdown(message["content"])
-            if message.get("sources") and not message.get("result"):
-                with st.expander("Retrieved source files"):
-                    render_source_list(message["sources"])
-
     question = st.session_state.pop("pending_copilot_question", None)
-    chat_question = st.chat_input("Ask Local SecOps Copilot about the AI Security Lab")
-    if chat_question:
-        question = chat_question
+    with st.form("copilot_question_form", clear_on_submit=True):
+        typed_question = st.text_input("Ask Local SecOps Copilot", value=question or "")
+        submitted = st.form_submit_button("Send question", type="primary")
+    if submitted and typed_question:
+        question = typed_question
 
     if question:
-        st.session_state["copilot_messages"].append({"role": "user", "content": question})
-        with st.chat_message("user"):
-            st.markdown(question)
+        previous_result = st.session_state.get("copilot_latest_result")
+        previous_question = st.session_state.get("copilot_latest_question")
+        if previous_result and previous_question:
+            st.session_state["copilot_messages"].append({"question": previous_question, "result": previous_result})
 
         try:
             result = generate_copilot_answer(
@@ -331,17 +488,72 @@ def render_copilot_chat() -> None:
         elif result.get("timed_out"):
             st.warning(result["answer"])
 
-        history_content = build_history_summary(result)
-        st.session_state["copilot_messages"].append(
-            {
-                "role": "assistant",
-                "content": history_content,
-                "sources": result["sources"],
-                "result": result,
-            }
-        )
-        with st.chat_message("assistant"):
-            render_copilot_answer_card(result)
+        st.session_state["copilot_latest_question"] = question
+        st.session_state["copilot_latest_result"] = result
+
+    latest_result = st.session_state.get("copilot_latest_result")
+    latest_question = st.session_state.get("copilot_latest_question")
+    if latest_result:
+        st.markdown("### Latest Answer")
+        with st.container(border=True):
+            st.markdown(f"**Question:** {latest_question}")
+        render_copilot_answer_card(latest_result)
+
+    if st.session_state["copilot_messages"]:
+        with st.expander("Previous Responses", expanded=False):
+            for index, item in enumerate(reversed(st.session_state["copilot_messages"]), start=1):
+                st.markdown(f"#### Previous Response {index}")
+                st.markdown(f"**Question:** {item['question']}")
+            render_copilot_answer_card(item["result"])
+
+
+def get_analysis_iocs(analysis) -> list:
+    """Return extracted IOCs from current or older EvidenceAnalysis objects."""
+    return getattr(analysis, "iocs", None) or getattr(analysis, "extracted_iocs", None) or []
+
+
+def get_analysis_findings(analysis) -> list:
+    """Return detected behaviors from current or older EvidenceAnalysis objects."""
+    findings = getattr(analysis, "findings", None) or getattr(analysis, "detected_behaviors", None) or []
+    return [item for item in findings if not is_streamlit_delta_generator(item)]
+
+
+def get_analysis_risk_scores(analysis) -> list:
+    """Return risk scores safely for dashboard rendering."""
+    return getattr(analysis, "risk_scores", None) or []
+
+
+def get_analysis_ioc_counts(analysis) -> dict:
+    """Return IOC counts with stable dashboard keys."""
+    counts = getattr(analysis, "ioc_summary_counts", None) or {}
+    return {
+        "total_ips": counts.get("total_ips", 0),
+        "total_urls_domains": counts.get("total_urls_domains", 0),
+        "total_users": counts.get("total_users", 0),
+        "total_devices": counts.get("total_devices", 0),
+        "total_suspicious_command_indicators": counts.get("total_suspicious_command_indicators", 0),
+    }
+
+
+def get_analysis_profile(analysis):
+    """Return the structured profile when present."""
+    return getattr(analysis, "evidence_profile", None)
+
+
+def get_highest_priority_finding(analysis) -> str:
+    """Return a stable highest-priority finding string."""
+    profile = get_analysis_profile(analysis)
+    if profile and getattr(profile, "highest_priority_finding", ""):
+        return profile.highest_priority_finding
+    return getattr(analysis, "highest_priority_finding", "") or "No suspicious behavior exceeded the local rule threshold."
+
+
+def is_streamlit_delta_generator(value) -> bool:
+    """Return True for Streamlit UI objects that must never be treated as analysis data."""
+    value_type = type(value)
+    module = getattr(value_type, "__module__", "").lower()
+    name = getattr(value_type, "__name__", "").lower()
+    return "streamlit" in module and "deltagenerator" in name
 
 
 def render_provider_status(status) -> None:
@@ -399,8 +611,17 @@ def generate_copilot_answer(
 def render_copilot_answer_card(result: dict) -> None:
     """Render the Copilot answer in a product-style card."""
     with st.container(border=True):
+        render_copilot_metadata_cards(result)
+
         st.markdown("### Answer")
         st.markdown(result["answer"])
+
+        kql_query = extract_fenced_kql(result["answer"])
+        if kql_query:
+            st.markdown("### KQL Query")
+            st.code(kql_query, language="kql")
+
+        render_copilot_evidence_tables()
 
         st.markdown("### Recommended Next Steps")
         for index, step in enumerate(result["recommended_next_steps"], start=1):
@@ -431,6 +652,9 @@ def render_copilot_answer_card(result: dict) -> None:
         st.markdown("### Retrieval Confidence")
         st.markdown(result["retrieval_confidence"])
 
+        st.markdown("### Detected Intent")
+        st.markdown(f"`{result.get('detected_intent', 'general_question')}`")
+
         st.markdown("### Limitations")
         for limitation in result["limitations"]:
             st.markdown(f"- {limitation}")
@@ -442,15 +666,103 @@ def render_copilot_answer_card(result: dict) -> None:
         st.code(render_markdown(result), language="markdown")
 
 
+def render_copilot_metadata_cards(result: dict) -> None:
+    """Render compact metadata cards above a Copilot answer."""
+    analysis = st.session_state.get("evidence_analysis")
+    risk_scores = get_analysis_risk_scores(analysis) if analysis else []
+    iocs = get_analysis_iocs(analysis) if analysis else []
+    highest_score = max([getattr(score, "score", 0) for score in risk_scores], default=0)
+    evidence_type = getattr(analysis, "evidence_type", "No uploaded evidence") if analysis else "No uploaded evidence"
+    card_values = [
+        ("Detected Intent", result.get("detected_intent", "general_question")),
+        ("Evidence Type", evidence_type),
+        ("Highest Risk Score", highest_score),
+        ("Number of IOCs", len(iocs)),
+        ("Source Count", len(result.get("sources", []))),
+    ]
+    columns = st.columns(len(card_values))
+    for column, (label, value) in zip(columns, card_values):
+        with column:
+            st.metric(label, value)
+
+
+def render_copilot_evidence_tables() -> None:
+    """Render active evidence risk and IOC details alongside Copilot answers."""
+    analysis = st.session_state.get("evidence_analysis")
+    if not analysis:
+        return
+
+    risk_scores = get_analysis_risk_scores(analysis)
+    if risk_scores:
+        st.markdown("### Evidence Risk Scores")
+        risk_rows = [
+            {
+                "Rank": index,
+                "Entity": getattr(score, "entity", "unknown"),
+                "Type": getattr(score, "entity_type", "Unknown"),
+                "Score": getattr(score, "score", 0),
+                "Reasons": ", ".join(getattr(score, "reasons", [])[:8]),
+            }
+            for index, score in enumerate(risk_scores[:8], start=1)
+        ]
+        st.dataframe(risk_rows, width="stretch", hide_index=True)
+
+    iocs = get_analysis_iocs(analysis)
+    if iocs:
+        st.markdown("### IOCs / Investigation Artifacts Observed")
+        grouped_rows = [
+            {
+                "Type": getattr(item, "type", "Unknown"),
+                "Value": getattr(item, "display_value", ""),
+                "Source / Context": getattr(item, "source", ""),
+                "Why It Matters": getattr(item, "why_it_matters", ""),
+            }
+            for item in iocs[:30]
+        ]
+        st.dataframe(grouped_rows, width="stretch", hide_index=True)
+
+
+def extract_fenced_kql(markdown: str) -> str:
+    """Return the first fenced KQL block from a Markdown answer."""
+    marker = "```kql"
+    if marker not in markdown:
+        return ""
+    after_marker = markdown.split(marker, 1)[1]
+    content, separator, _ = after_marker.partition("```")
+    if not separator:
+        return ""
+    return content.strip()
+
+
 def render_source_list(sources: list[dict]) -> None:
-    """Render retrieved local sources as readable bullets."""
+    """Render retrieved local sources as readable source cards."""
     if not sources:
         st.write("No local sources used.")
         return
 
     for source in sources:
         heading = source.get("heading") or "Untitled section"
-        st.markdown(f"- `{source['path']}` - {heading} (score: {source['score']})")
+        source_type = classify_source_type(source["path"])
+        with st.container(border=True):
+            st.markdown(f"**{source_type}**")
+            st.code(source["path"], language="text")
+            st.caption(f"{heading} | score: {source['score']}")
+
+
+def classify_source_type(path: str) -> str:
+    """Return a friendly source type label for dashboard citations."""
+    lowered = path.lower()
+    if "docs/soc_playbooks/" in lowered:
+        return "SOC Playbook"
+    if "automation/kql/" in lowered:
+        return "KQL Hunting Query"
+    if "automation/powershell/" in lowered:
+        return "Read-Only PowerShell Sample"
+    if "automation/ticket-templates/" in lowered:
+        return "Freshservice-Style Ticket Template"
+    if "uploaded evidence summary" in lowered:
+        return "Current Session Evidence Summary"
+    return "Local Lab Source"
 
 
 def build_history_summary(result: dict) -> str:

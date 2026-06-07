@@ -1,0 +1,17 @@
+// Sample Defender XDR / Sentinel-style suspicious PowerShell hunting query.
+// Demo only. Uses placeholder device names and generic command-line indicators.
+DeviceProcessEvents
+| where DeviceName =~ "DEVICE-NAME" or AccountName has "user"
+| where FileName in~ ("powershell.exe", "pwsh.exe")
+| where ProcessCommandLine has_any (
+    "EncodedCommand",
+    "-ExecutionPolicy Bypass",
+    "Invoke-WebRequest",
+    "DownloadString",
+    "FromBase64String",
+    "IEX",
+    "-WindowStyle Hidden"
+)
+| project Timestamp, DeviceName, AccountName, InitiatingProcessFileName,
+          FileName, ProcessCommandLine, ReportId
+| order by Timestamp desc

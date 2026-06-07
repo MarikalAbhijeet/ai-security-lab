@@ -1,0 +1,12 @@
+// Sample Microsoft Sentinel-style risky sign-in hunting query.
+// Demo only. Replace placeholders only in an approved lab workspace.
+SigninLogs
+| where UserPrincipalName =~ "user@example.com"
+    or IPAddress == "203.0.113.10"
+| extend RiskState = tostring(RiskState), Result = tostring(ResultType)
+| where RiskState in~ ("atRisk", "confirmedCompromised")
+    or Result != "0"
+    or ConditionalAccessStatus in~ ("failure", "notApplied")
+| project TimeGenerated, UserPrincipalName, IPAddress, AppDisplayName, ResultType,
+          RiskState, RiskLevelAggregated, ConditionalAccessStatus, DeviceDetail, Location
+| order by TimeGenerated desc

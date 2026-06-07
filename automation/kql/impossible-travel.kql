@@ -1,0 +1,12 @@
+// Sample Sentinel-style impossible travel investigation query.
+// Demo only. Validate against lab data before adapting.
+SigninLogs
+| where UserPrincipalName =~ "user@example.com"
+| project TimeGenerated, UserPrincipalName, IPAddress, Location, AppDisplayName,
+          ResultType, RiskDetail, RiskLevelAggregated, DeviceDetail
+| order by TimeGenerated asc
+| serialize
+| extend PreviousLocation = prev(Location), PreviousTime = prev(TimeGenerated), PreviousIP = prev(IPAddress)
+| where isnotempty(PreviousLocation) and tostring(Location) != tostring(PreviousLocation)
+| project TimeGenerated, PreviousTime, UserPrincipalName, PreviousIP, IPAddress,
+          PreviousLocation, Location, AppDisplayName, RiskDetail, RiskLevelAggregated

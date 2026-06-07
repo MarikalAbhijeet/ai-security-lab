@@ -1,0 +1,12 @@
+// Sample Defender-style mass file deletion hunting query.
+// Demo only. Tune thresholds in a lab before production use.
+DeviceFileEvents
+| where ActionType in~ ("FileDeleted", "FileRenamed")
+| where DeviceName =~ "DEVICE-NAME" or InitiatingProcessAccountName has "user"
+| summarize DeletedFileCount=count(),
+            SampleFiles=make_set(FileName, 10),
+            FirstSeen=min(Timestamp),
+            LastSeen=max(Timestamp)
+    by DeviceName, InitiatingProcessAccountName, InitiatingProcessFileName, bin(Timestamp, 15m)
+| where DeletedFileCount >= 25
+| order by DeletedFileCount desc

@@ -5,7 +5,7 @@
 ![Security](https://img.shields.io/badge/Focus-AI%20Security%20%7C%20SOC-green)
 ![Portfolio](https://img.shields.io/badge/Portfolio-Security%20Lab-purple)
 
-AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, AI vendor risk review, synthetic ML anomaly detection, and a local-first Security Copilot experience using safe local sample data.
+AI Security Lab is a professional portfolio repository that demonstrates practical security automation, SOC triage, phishing analysis, prompt injection testing, AI vendor risk review, synthetic ML anomaly detection, evidence analysis, IOC extraction, SOC playbooks, and a local-first Security Copilot experience using safe local sample data.
 
 The lab reflects a profile focused on Security Operations, Microsoft Defender, Microsoft Sentinel, Entra ID / IAM, Cloud Security, Python automation, and AI Security. Each tool starts with simple rule-based logic so the workflows are easy to review, extend, and explain.
 
@@ -20,6 +20,8 @@ The lab reflects a profile focused on Security Operations, Microsoft Defender, M
 | [`05-ml-anomaly-detection`](05-ml-anomaly-detection/README.md) | Uses IsolationForest to score fake/synthetic security logs for unusual activity. | ML-assisted SOC triage, anomaly scoring, human review limits |
 | [`evidence_analyzer`](evidence_analyzer/README.md) | Parses fake/sample JSON, CSV, TXT, or LOG evidence and generates IOC-focused local threat summaries for the dashboard. | Evidence handling, IOC extraction, local parsing, threat rules, Copilot-safe context summaries |
 | [`security_copilot`](security_copilot/README.md) | Local-first Security Copilot that retrieves repo context and can answer through Ollama using `qwen2.5:3b`. | Local RAG, Ollama, source citation, guardrails, safe AI usage |
+| [`automation`](automation/README.md) | Sample-safe Microsoft Security automation library with KQL, read-only PowerShell references, and Freshservice-style ticket templates. | Sentinel/Defender hunting, read-only investigation scripts, ticket documentation |
+| [`docs/soc_playbooks`](docs/soc_playbooks/README.md) | SOC playbooks for suspicious PowerShell, risky sign-in, phishing, malware, impossible travel, and mass deletion. | Investigation process, escalation criteria, MITRE ATT&CK, analyst workflow |
 
 ## Why This Project Matters
 
@@ -48,6 +50,7 @@ The repository is intentionally local, transparent, and rule-based. That makes i
 - pandas-based CSV validation and feature preparation
 - Local-first RAG orchestration with TF-IDF retrieval, Ollama, guardrails, and source-cited answers
 - Local evidence upload handling with safe parsing, IOC extraction, sensitive-content blocking, and temporary session-only Copilot context
+- SOC playbook writing, KQL hunting references, read-only PowerShell investigation samples, and Freshservice-style ticket templates
 
 ## Frameworks And Concepts
 
@@ -59,6 +62,7 @@ The repository is intentionally local, transparent, and rule-based. That makes i
 - Secure local development practices using fake/sample data only
 - ML-assisted triage concepts with human review limitations
 - Retrieval-augmented generation concepts with a local Ollama LLM provider and CI-safe mock mode
+- Microsoft Sentinel / Defender-style SOC investigation resources using sample-safe placeholders only
 
 See [docs/framework_mapping.md](docs/framework_mapping.md) for the cross-project mapping.
 
@@ -148,6 +152,8 @@ The dashboard includes:
 - `Security Analysis Modules` for analyzer reports.
 - `Threat Evidence Workbench` for local upload analysis of fake/sample JSON, CSV, TXT, or LOG evidence.
 - `Local SecOps Copilot` for local Ollama-powered, source-cited questions over repository documentation and sample lab files.
+- Status cards for local LLM, model, evidence analysis, IOC extraction, and playbook library readiness.
+- SOC playbook, KQL, read-only PowerShell, and ticket-template citations for common investigation questions.
 - Compact Ollama readiness status with detailed provider diagnostics hidden under `Provider Debug Details`.
 - Example Copilot prompt buttons, a visible local-model loading panel, and a Clear chat control.
 - Advanced retrieval settings hidden by default so normal demo users are not distracted by tuning controls.
@@ -215,6 +221,8 @@ The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Ex
 - [Testing guide](docs/testing_guide.md)
 - [Local startup guide](docs/local_startup_guide.md)
 - [Threat Evidence Workbench](evidence_analyzer/README.md)
+- [SOC playbook library](docs/soc_playbooks/README.md)
+- [Microsoft Security automation library](automation/README.md)
 
 ## Future Roadmap
 

@@ -1,6 +1,6 @@
 # AI Security Command Center
 
-AI Security Command Center is a Streamlit dashboard for running the local AI Security Lab analyzers, ML anomaly detection module, and Local SecOps Copilot from one browser interface.
+AI Security Command Center is a Streamlit dashboard for running the local AI Security Lab analyzers, ML anomaly detection module, Threat Evidence Workbench, and Local SecOps Copilot from one browser interface.
 
 The dashboard can use fake/sample JSON files already stored in this repository or a custom JSON file uploaded from your computer. It does not call Microsoft services, paid APIs, cloud AI services, vendor portals, or live security systems. Local SecOps Copilot can call only local Ollama when enabled.
 
@@ -13,6 +13,8 @@ The dashboard can use fake/sample JSON files already stored in this repository o
 - ML Anomaly Detection
 - Threat Evidence Workbench
 - Local SecOps Copilot
+- SOC Playbook Library
+- Microsoft Security Automation Library
 
 ## Setup
 
@@ -58,6 +60,8 @@ Then open the local URL shown by Streamlit.
 - `Threat Evidence Workbench`: upload fake/sample JSON, CSV, TXT, or LOG evidence for local threat analysis.
 - `Local SecOps Copilot`: ask a question, choose an answer mode, retrieve local source files, and generate a source-cited answer through local Ollama or mock mode.
 
+The top dashboard summary shows status cards for local Ollama, the default model, evidence analysis, IOC extraction, and the playbook library.
+
 ## Input Options
 
 ### Use Sample JSON
@@ -89,7 +93,9 @@ Threat Evidence Workbench supports local-only analysis for fake/sample evidence 
 - `.txt`
 - `.log`
 
-The dashboard validates file type and size, parses the uploaded evidence in memory, blocks sensitive-looking content, extracts IOCs and investigation artifacts, runs rule-based detections, and generates a Markdown evidence report. Uploaded files are not saved permanently and are not indexed into the repository RAG store.
+The dashboard validates file type and size, parses the uploaded evidence in memory, blocks sensitive-looking content, extracts IOCs and investigation artifacts, runs rule-based detections, builds an Evidence Intelligence profile, and generates a Markdown evidence report. Uploaded files are not saved permanently and are not indexed into the repository RAG store.
+
+The Workbench displays evidence summary cards, IOC count metric cards, IOC charts, risk-score charts, the highest priority finding, risky entity tables, detected behavior tables, and a grouped IOC / investigation artifact table. All sample IOCs are fake/demo values.
 
 When you select `Ask Local SecOps Copilot about this evidence`, the Copilot receives only the summarized evidence and IOC context from the current session. The raw full uploaded file is not sent to the Copilot prompt and is not written to disk.
 
@@ -101,12 +107,18 @@ The Copilot tab uses the `security_copilot` module. It shows:
 - Setup instructions when Ollama or `qwen2.5:3b` is unavailable
 - Answer mode selection
 - Example prompt buttons for common SOC, phishing, prompt injection, and vendor review questions
+- Quick-action prompts for risky sign-in, suspicious PowerShell KQL, phishing ticket notes, malware review, impossible travel escalation, and uploaded evidence IOCs
 - Retrieved source count selection inside `Advanced Settings`
 - Chat-style message history
 - Clear chat button
 - Visible local-model loading panel while Ollama generates
 - Local source citations
+- Source cards that label SOC playbooks, KQL hunting queries, read-only PowerShell samples, ticket templates, current-session evidence, and general lab sources
 - Provider debug fields for API reachability, model installation, timeout settings, and last error inside `Provider Debug Details`
+
+The Copilot retrieves from local READMEs, project docs, `docs/soc_playbooks`, `automation/kql`, `automation/powershell`, and `automation/ticket-templates`. Uploaded evidence questions prioritize the current-session evidence summary before matching SOC playbooks and automation assets.
+
+When evidence-aware mode is active, the question composer stays near the top of the Copilot tab, the latest answer appears directly below it, and older answers are kept under `Previous Responses`.
 
 Default local model setup:
 

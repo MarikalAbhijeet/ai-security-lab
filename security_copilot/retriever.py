@@ -174,17 +174,72 @@ def retrieve(question: str, index_root=None, top_k=5) -> list[DocumentChunk]:
     vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), max_features=10000)
     matrix = vectorizer.fit_transform([chunk.text for chunk in chunks])
     scores = cosine_similarity(vectorizer.transform([question]), matrix).flatten()
-    ranked = scores.argsort()[::-1][:top_k]
+    boosted_scores = [
+        float(score) + source_priority_boost(question, chunks[index])
+        for index, score in enumerate(scores)
+    ]
+    ranked = []
+    seen_sources = set()
+    for index in sorted(range(len(chunks)), key=lambda item: boosted_scores[item], reverse=True):
+        if chunks[index].source_path in seen_sources:
+            continue
+        ranked.append(index)
+        seen_sources.add(chunks[index].source_path)
+        if len(ranked) == top_k:
+            break
     return [
         DocumentChunk(
             source_path=chunks[index].source_path,
             heading=chunks[index].heading,
             text=chunks[index].text,
-            score=float(scores[index]),
+            score=float(boosted_scores[index]),
         )
         for index in ranked
-        if float(scores[index]) > 0
+        if float(boosted_scores[index]) > 0
     ]
+
+
+def source_priority_boost(question: str, chunk: DocumentChunk) -> float:
+    """Prefer SOC playbooks and automation assets for matching SOC questions."""
+    lowered_question = question.lower()
+    source = chunk.source_path.lower()
+    topic_terms = {
+        "suspicious-powershell": ("powershell", "encodedcommand", "script", "winword"),
+        "risky-signin": ("risky sign", "risky-sign", "sign-in", "signin", "failed mfa", "mfa"),
+        "phishing": ("phishing", "email", "invoice", "qr"),
+        "malware": ("malware", "defender alert", "threat"),
+        "impossible-travel": ("impossible travel", "travel"),
+        "mass-file-deletion": ("mass file", "file deletion", "deleted files", "deletion"),
+    }
+    if not any(any(term in lowered_question for term in terms) for terms in topic_terms.values()):
+        return 0.0
+
+    boost = 0.0
+    if "docs/soc_playbooks/" in source:
+        boost += 0.35
+    if "automation/kql/" in source:
+        boost += 0.28
+    if "automation/ticket-templates/" in source:
+        boost += 0.22
+    if "automation/powershell/" in source:
+        boost += 0.18
+
+    if "kql" in lowered_question or "query" in lowered_question or "hunt" in lowered_question:
+        if "automation/kql/" in source:
+            boost += 0.35
+        if "automation/ticket-templates/" in source:
+            boost -= 0.1
+
+    for topic, terms in topic_terms.items():
+        if any(term in lowered_question for term in terms) and topic in source:
+            boost += 0.45
+
+    if "03-prompt-injection-lab/" in source and any(
+        term in lowered_question
+        for term in ("powershell", "sign-in", "signin", "phishing", "malware", "impossible travel", "file deletion", "evidence")
+    ):
+        boost -= 0.6
+    return boost
 
 
 def chunk_text_by_heading(text: str) -> list[tuple[str, str]]:

@@ -11,7 +11,8 @@ This document summarizes how AI Security Lab maps the four projects to security 
 | Prompt Injection Lab | Not the primary focus, though some concepts overlap with exfiltration and defense evasion thinking. | Uses MITRE ATLAS-style AI threat categories for unsafe prompt behavior. | Maps prompt injection, sensitive information disclosure, insecure output handling, and excessive agency themes. | AI application controls, safe response behavior, defensive testing |
 | AI Vendor Risk Toolkit | Not the primary focus. | References AI system risk concepts at a governance level. | References LLM application risks in vendor review questions and findings. | Vendor due diligence, IAM controls, data protection, logging, retention, subprocessors, deletion support |
 | ML Anomaly Detection | Maps suspicious synthetic log patterns to valid accounts, brute force, PowerShell, and data destruction concepts. | Not the primary focus. | Not the primary focus. | Human review, model limitations, synthetic ML security lab practices |
-| Security Copilot Chat | Retrieves local ATT&CK-related notes and sample reports when relevant. | Retrieves local AI security notes when relevant. | Retrieves local OWASP LLM notes when relevant. | Safe AI usage, source citation, local-only RAG boundaries |
+| Security Copilot Chat | Retrieves local ATT&CK-related notes, SOC playbooks, KQL, ticket templates, read-only PowerShell samples, and sample reports when relevant. | Retrieves local AI security notes when relevant. | Retrieves local OWASP LLM notes when relevant. | Safe AI usage, source citation, local-only RAG boundaries |
+| SOC Playbook And Automation Library | Maps suspicious PowerShell, risky sign-in, phishing, malware, impossible travel, and mass deletion workflows to ATT&CK-style investigation themes. | Not the primary focus. | Not the primary focus. | SOC playbooks, KQL hunting, read-only PowerShell review, ticket documentation |
 
 ## MITRE ATT&CK
 
@@ -78,3 +79,14 @@ The ML anomaly detection module demonstrates how synthetic security features can
 ## Local RAG-Style Security Assistance
 
 Security Copilot Chat demonstrates retrieval-augmented security assistance with local-only retrieval, guardrails, local Ollama generation, deterministic mock mode for tests, cited source files, and safe-use warnings.
+
+## Sample-Safe Microsoft Security Resources
+
+The `automation` and `docs/soc_playbooks` folders add Microsoft Sentinel / Defender-style investigation resources that are safe for portfolio use:
+
+- KQL hunting queries use placeholders such as `user@example.com`, `DEVICE-NAME`, `203.0.113.10`, and `example.invalid`.
+- PowerShell examples are read-only references and do not modify users, sessions, files, devices, policies, or tenant settings.
+- Ticket templates use Freshservice-style language without connecting to a live ticketing system.
+- SOC playbooks include analyst triage steps, IOCs to collect, MITRE ATT&CK mapping, escalation criteria, and human review warnings.
+
+These are not production-ready queries or scripts. They are sample-safe learning and demo resources that require review before any real-world adaptation.

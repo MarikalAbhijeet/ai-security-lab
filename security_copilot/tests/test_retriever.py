@@ -39,6 +39,21 @@ class RetrieverTests(unittest.TestCase):
         self.assertTrue(all(chunk.source_path for chunk in chunks))
         self.assertTrue(all(chunk.score > 0 for chunk in chunks))
 
+    def test_automation_and_playbook_sources_are_indexed(self):
+        files = {path.relative_to(REPO_ROOT).as_posix() for path in discover_files(REPO_ROOT)}
+
+        self.assertIn("automation/kql/suspicious-powershell.kql", files)
+        self.assertIn("automation/powershell/Get-DefenderAlertSummary-Sample.ps1", files)
+        self.assertIn("docs/soc_playbooks/suspicious-powershell-playbook.md", files)
+
+    def test_soc_questions_prefer_matching_playbooks_and_kql(self):
+        chunks = retrieve("What KQL should I run for suspicious PowerShell?", index_root=REPO_ROOT, top_k=5)
+        sources = [chunk.source_path for chunk in chunks]
+
+        self.assertIn("automation/kql/suspicious-powershell.kql", sources)
+        self.assertIn("docs/soc_playbooks/suspicious-powershell-playbook.md", sources)
+        self.assertFalse(any("03-prompt-injection-lab" in source for source in sources))
+
     def test_index_root_must_stay_inside_repo(self):
         with self.assertRaises(ValueError):
             resolve_index_root(Path("C:/"))

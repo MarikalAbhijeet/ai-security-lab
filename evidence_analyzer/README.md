@@ -9,7 +9,7 @@ It supports fake/sample evidence files only:
 - TXT
 - LOG
 
-The module parses uploaded evidence in memory, detects the likely evidence type, extracts IOCs and investigation artifacts, runs simple rule-based threat detections, and generates a Markdown report for SOC-style review.
+The module parses uploaded evidence in memory, detects the likely evidence type, extracts IOCs and investigation artifacts, runs simple rule-based threat detections, builds an Evidence Intelligence profile, and generates a Markdown report for SOC-style review.
 
 ## Safety Model
 
@@ -51,6 +51,18 @@ Current rules cover:
 - Suspicious URL indicators
 - Admin role or privileged action keywords
 - Malware or high-severity alert indicators
+
+## Evidence Intelligence Layer
+
+For every uploaded fake/sample file, the workbench builds a structured profile with:
+
+- Evidence type, file name, total records/lines, severity, and highest-priority finding
+- Top risky users, devices, IPs, processes, and events
+- Explainable risk scores with reasons and recommended review actions
+- Extracted IOCs and detected suspicious behaviors
+- MITRE ATT&CK mappings, recommended KQL topics, SOC actions, and a ticket-note summary
+
+Local SecOps Copilot receives this bounded profile and IOC summary instead of raw uploaded file content.
 
 ## IOC Extraction
 

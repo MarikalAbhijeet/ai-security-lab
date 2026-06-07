@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from evidence_intelligence import EvidenceProfile, build_evidence_profile, render_profile_for_copilot
 from evidence_parser import EvidenceDocument, parse_evidence_file
 from ioc_extractor import IOC, extract_iocs, ioc_counts
+from risk_scoring import RiskScore, score_evidence
 from schema_detector import detect_evidence_type
 from threat_rules import ThreatFinding, analyze_document
 
@@ -14,15 +16,28 @@ from threat_rules import ThreatFinding, analyze_document
 class EvidenceAnalysis:
     """Structured evidence analysis result."""
 
-    file_name: str
-    evidence_type: str
-    total_items: int
-    findings: list[ThreatFinding]
-    iocs: list[IOC]
-    ioc_summary_counts: dict[str, int]
-    severity: str
-    markdown_report: str
-    copilot_context: str
+    file_name: str = "uploaded evidence"
+    evidence_type: str = "Unknown evidence"
+    total_items: int = 0
+    findings: list[ThreatFinding] = field(default_factory=list)
+    iocs: list[IOC] = field(default_factory=list)
+    ioc_summary_counts: dict[str, int] = field(default_factory=dict)
+    risk_scores: list[RiskScore] = field(default_factory=list)
+    evidence_profile: EvidenceProfile = field(default_factory=EvidenceProfile)
+    severity: str = "Low"
+    markdown_report: str = ""
+    copilot_context: str = ""
+    extracted_iocs: list[IOC] = field(default_factory=list)
+    detected_behaviors: list[ThreatFinding] = field(default_factory=list)
+    highest_priority_finding: str = "No suspicious behavior exceeded the local rule threshold."
+    severity_recommendation: str = "Low"
+    top_risky_users: list[RiskScore] = field(default_factory=list)
+    top_risky_devices: list[RiskScore] = field(default_factory=list)
+    top_risky_ips: list[RiskScore] = field(default_factory=list)
+    top_suspicious_processes: list[RiskScore] = field(default_factory=list)
+    mitre_attack_mapping: list[str] = field(default_factory=list)
+    recommended_soc_actions: list[str] = field(default_factory=list)
+    ticket_note_summary: str = ""
 
 
 def analyze_evidence(file_name: str, content: bytes) -> EvidenceAnalysis:
@@ -34,9 +49,34 @@ def analyze_evidence(file_name: str, content: bytes) -> EvidenceAnalysis:
     counts = ioc_counts(iocs)
     severity = recommend_severity(findings)
     total_items = len(document.records) if document.records else len(document.lines)
-    markdown = render_markdown_report(document, evidence_type, total_items, findings, iocs, counts, severity)
-    context = render_copilot_context(document, evidence_type, total_items, findings, iocs, counts, severity)
-    return EvidenceAnalysis(document.file_name, evidence_type, total_items, findings, iocs, counts, severity, markdown, context)
+    risk_scores = score_evidence(document, findings, iocs)
+    profile = build_evidence_profile(document.file_name, evidence_type, total_items, severity, findings, iocs, risk_scores)
+    markdown = render_markdown_report(document, evidence_type, total_items, findings, iocs, counts, severity, profile)
+    context = render_copilot_context(document, evidence_type, total_items, findings, iocs, counts, severity, profile)
+    return EvidenceAnalysis(
+        file_name=document.file_name,
+        evidence_type=evidence_type,
+        total_items=total_items,
+        findings=findings,
+        iocs=iocs,
+        ioc_summary_counts=counts,
+        risk_scores=risk_scores,
+        evidence_profile=profile,
+        severity=severity,
+        markdown_report=markdown,
+        copilot_context=context,
+        extracted_iocs=iocs,
+        detected_behaviors=findings,
+        highest_priority_finding=profile.highest_priority_finding,
+        severity_recommendation=profile.severity_recommendation,
+        top_risky_users=profile.top_risky_users,
+        top_risky_devices=profile.top_risky_devices,
+        top_risky_ips=profile.top_risky_ips,
+        top_suspicious_processes=profile.top_suspicious_processes,
+        mitre_attack_mapping=profile.mitre_attack_mapping,
+        recommended_soc_actions=profile.recommended_soc_actions,
+        ticket_note_summary=profile.ticket_note_summary,
+    )
 
 
 def render_markdown_report(
@@ -47,6 +87,7 @@ def render_markdown_report(
     iocs: list[IOC],
     counts: dict[str, int],
     severity: str,
+    profile: EvidenceProfile,
 ) -> str:
     """Render a structured Markdown evidence report."""
     return "\n\n".join(
@@ -58,6 +99,10 @@ def render_markdown_report(
             severity,
             "## Highest-Priority IOCs",
             render_priority_iocs(iocs),
+            "## Evidence Intelligence Profile",
+            render_profile_summary(profile),
+            "## Risk Score Breakdown",
+            render_risk_scores(profile.risk_scores),
             "## IOC Summary Counts",
             render_ioc_counts(counts),
             "## Indicators and Investigation Artifacts",
@@ -92,6 +137,7 @@ def render_copilot_context(
     iocs: list[IOC],
     counts: dict[str, int],
     severity: str,
+    profile: EvidenceProfile,
 ) -> str:
     """Render bounded safe context for Local SecOps Copilot."""
     lines = [
@@ -106,6 +152,7 @@ def render_copilot_context(
         f"- Total users found: {counts['total_users']}",
         f"- Total devices found: {counts['total_devices']}",
         f"- Total suspicious command indicators found: {counts['total_suspicious_command_indicators']}",
+        render_profile_for_copilot(profile),
         "IOCs / Investigation Artifacts Observed:",
     ]
     if iocs:
@@ -116,7 +163,7 @@ def render_copilot_context(
 
     lines.append("Suspicious behaviors:")
     if findings:
-        for item in findings[:8]:
+        for item in findings[:6]:
             lines.append(
                 f"- {item.title} ({item.severity}): {item.description}; "
                 f"MITRE: {item.mitre_attack}; Recommended review: {item.recommendation}"
@@ -131,7 +178,7 @@ def render_copilot_context(
             "Uploaded file content is not permanently saved or indexed.",
         ]
     )
-    return "\n".join(lines)
+    return bound_context("\n".join(lines))
 
 
 def compact_source(source: str) -> str:
@@ -161,7 +208,15 @@ def select_copilot_iocs(iocs: list[IOC]) -> list[IOC]:
     selected = []
     for ioc_type in priority_order:
         selected.extend(item for item in iocs if item.type == ioc_type)
-    return selected[:20]
+    return selected[:15]
+
+
+def bound_context(context: str, max_chars: int = 4800) -> str:
+    """Keep Copilot context safely below validation limits."""
+    if len(context) <= max_chars:
+        return context
+    trimmed = context[:max_chars].rsplit("\n", 1)[0]
+    return trimmed + "\nContext truncated to safe summarized fields only."
 
 
 def recommend_severity(findings: list[ThreatFinding]) -> str:
@@ -207,6 +262,32 @@ def render_ioc_counts(counts: dict[str, int]) -> str:
             f"- Total suspicious command indicators found: {counts['total_suspicious_command_indicators']}",
         ]
     )
+
+
+def render_profile_summary(profile: EvidenceProfile) -> str:
+    """Render profile summary for the Markdown report."""
+    return "\n".join(
+        [
+            f"- Evidence type: {profile.evidence_type}",
+            f"- Severity recommendation: {profile.severity_recommendation}",
+            f"- Highest priority finding: {profile.highest_priority_finding}",
+            f"- Recommended KQL topics: {', '.join(profile.recommended_kql_topics)}",
+            f"- Ticket note summary: {profile.ticket_note_summary}",
+        ]
+    )
+
+
+def render_risk_scores(scores: list[RiskScore]) -> str:
+    """Render explainable risk scores."""
+    if not scores:
+        return "- No entity risk scores were generated."
+    lines = []
+    for score in scores[:10]:
+        lines.append(
+            f"- **{score.entity_type}: `{score.entity}`** - score `{score.score}`; "
+            f"reasons: {', '.join(score.reasons[:8])}; review: {score.recommended_review}"
+        )
+    return "\n".join(lines)
 
 
 def render_ioc_sections(iocs: list[IOC]) -> str:

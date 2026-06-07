@@ -72,17 +72,13 @@ class CopilotAssistantTests(unittest.TestCase):
         )
 
         self.assertEqual(result["sources"][0]["path"], "Uploaded evidence summary from current session")
-        self.assertEqual(len(result["sources"]), 1)
-        self.assertIn("current-session evidence summary only", result["retrieval_confidence"])
+        self.assertIn("current-session evidence summary", result["retrieval_confidence"])
+        self.assertEqual(result["detected_intent"], "ioc_listing")
         for heading in (
-            "## Highest Priority Finding",
-            "## Why this matters",
-            "## Evidence Observed",
             "## IOCs / Investigation Artifacts Observed",
-            "## Recommended SOC Actions",
-            "## MITRE ATT&CK Mapping",
-            "## Freshservice Ticket Note",
-            "## Human Review Warning",
+            "## IOC Counts",
+            "## High-Priority IOCs",
+            "## Validation Steps",
         ):
             self.assertIn(heading, result["answer"])
         self.assertIn("## IOCs / Investigation Artifacts Observed", result["answer"])
@@ -113,7 +109,6 @@ class CopilotAssistantTests(unittest.TestCase):
             session_context=session_context,
         )
 
-        self.assertEqual(len(result["sources"]), 1)
         self.assertEqual(result["sources"][0]["path"], "Uploaded evidence summary from current session")
         self.assertIn("devon[.]kim@example[.]test", result["answer"])
         self.assertIn("LAB-ENDPOINT-02", result["answer"])
@@ -130,10 +125,24 @@ class CopilotAssistantTests(unittest.TestCase):
             "File name: sample_signin_logs.csv\n"
             "Detected evidence type: Entra sign-in style logs\n"
             "Severity recommendation: High\n"
+            "Structured Evidence Intelligence Profile:\n"
+            "Evidence type: Entra sign-in style logs\n"
+            "Risk scores:\n"
+            "- user: alex[.]chen@example[.]com; score=100; reasons=multiple failed logins, successful login after failures, failed MFA, impossible travel, new device, risky country, unknown device; review=Review sign-in timeline, MFA results, device trust, source IP, country, and recent privileged actions.\n"
+            "- user: service.admin@example[.]com; score=75; reasons=privileged action, service/admin account activity, role assignment attempt; review=Review privileged action scope, approver, and change ticket.\n"
+            "MITRE ATT&CK mapping:\n"
+            "- Credential Access: Brute Force\n"
+            "- Initial Access: Valid Accounts\n"
+            "Recommended KQL topics:\n"
+            "- failed logins\n"
+            "- successful login after failures\n"
+            "- failed MFA\n"
+            "Recommended SOC actions:\n"
+            "- Review sign-in timeline, MFA results, device state, source IPs, travel context, and recent privileged activity for the user.\n"
             "IOCs / Investigation Artifacts Observed:\n"
-            "- User: jordan[.]lee@example[.]test; Source: Record 2\n"
-            "- IP Address: 203[.]0[.]113[.]44; Source: Record 2\n"
-            "- Device / Host: UNKNOWN-DEVICE; Source: Record 2\n"
+            "- User: alex[.]chen@example[.]com; Source: Record 1\n"
+            "- IP Address: 198[.]51[.]100[.]24; Source: Record 1\n"
+            "- Device / Host: LAB-WIN-101; Source: Record 1\n"
             "Suspicious behaviors:\n"
             "- Multiple failed logins (Medium): Repeated failed authentication attempts were observed.; MITRE: Credential Access: Brute Force; Recommended review: Review sign-in history, source IP, user risk, and MFA prompts.\n"
             "- Successful login after failures (High): A successful login occurred after earlier failed attempts in the same evidence set.; MITRE: Credential Access: Brute Force; Recommended review: Validate the successful session, reset credentials if suspicious, and revoke sessions.\n"
@@ -150,14 +159,93 @@ class CopilotAssistantTests(unittest.TestCase):
             session_context=session_context,
         )
 
-        self.assertEqual(len(result["sources"]), 1)
-        self.assertIn("jordan[.]lee@example[.]test", result["answer"])
-        self.assertIn("Multiple failed logins", result["answer"])
-        self.assertIn("Successful login after failures", result["answer"])
-        self.assertIn("Failed MFA", result["answer"])
-        self.assertIn("Impossible travel", result["answer"])
-        self.assertIn("New device", result["answer"])
-        self.assertIn("Risky country", result["answer"])
+        self.assertEqual(result["sources"][0]["path"], "Uploaded evidence summary from current session")
+        self.assertIn("alex[.]chen@example[.]com", result["answer"])
+        self.assertIn("**User:** `alex[.]chen@example[.]com`", result["answer"])
+        self.assertIn("**Risk Score:** `100`", result["answer"])
+        self.assertIn("### Ranked Risk Summary", result["answer"])
+        self.assertIn("| 1 | `alex[.]chen@example[.]com` | User | 100 |", result["answer"])
+        self.assertIn("| 2 | `service.admin@example[.]com` | User | 75 |", result["answer"])
+        self.assertNotIn("### Highest Priority Entity\n\n- device:", result["answer"].lower())
+        self.assertIn("multiple failed logins", result["answer"])
+        self.assertIn("successful login after failures", result["answer"])
+        self.assertIn("failed MFA", result["answer"])
+        self.assertIn("impossible travel", result["answer"])
+        self.assertIn("new device", result["answer"])
+        self.assertIn("risky country", result["answer"])
+        self.assertIn("unknown device", result["answer"])
+        source_paths = "\n".join(source["path"] for source in result["sources"])
+        self.assertIn("risky-signin", source_paths)
+        self.assertNotIn("malware-alert", source_paths)
+
+    def test_evidence_kql_intent_returns_actual_kql(self):
+        config = CopilotConfig(provider="mock", test_mode=True)
+        session_context = (
+            "Uploaded evidence summary from current session.\n"
+            "File name: sample_signin_logs.csv\n"
+            "Detected evidence type: Entra sign-in style logs\n"
+            "Severity recommendation: High\n"
+            "IOC summary counts:\n"
+            "- Total IPs found: 1\n"
+            "- Total URLs/domains found: 0\n"
+            "- Total users found: 1\n"
+            "- Total devices found: 1\n"
+            "- Total suspicious command indicators found: 0\n"
+            "Structured Evidence Intelligence Profile:\n"
+            "Evidence type: Entra sign-in style logs\n"
+            "Risk scores:\n"
+            "- user: alex[.]chen@example[.]com; score=92; reasons=multiple failed logins, successful login after failures, failed MFA\n"
+            "Recommended KQL topics:\n"
+            "- failed logins\n"
+            "- successful login after failures\n"
+            "- failed MFA\n"
+            "IOCs / Investigation Artifacts Observed:\n"
+            "- User: alex[.]chen@example[.]com; Source: Record 1\n"
+            "Suspicious behaviors:\n"
+            "- Failed MFA (Medium): MFA failure or denial was observed.; MITRE: Credential Access: Multi-Factor Authentication Request Generation; Recommended review: Check MFA.\n"
+        )
+
+        result = answer_question(
+            "What KQL should I run next for this uploaded sign-in evidence?",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=session_context,
+        )
+
+        self.assertEqual(result["detected_intent"], "kql_recommendation")
+        self.assertIn("```kql", result["answer"])
+        self.assertIn("SigninLogs", result["answer"])
+        self.assertIn("Fields to replace", result["answer"])
+        self.assertIn("```kql", result["answer"])
+
+    def test_evidence_ticket_intent_returns_ticket_style_content(self):
+        config = CopilotConfig(provider="mock", test_mode=True)
+        session_context = (
+            "Uploaded evidence summary from current session.\n"
+            "File name: sample_defender_alert.json\n"
+            "Detected evidence type: Defender alert JSON\n"
+            "Severity recommendation: High\n"
+            "Structured Evidence Intelligence Profile:\n"
+            "Freshservice ticket note summary: Reviewed fake/sample evidence `sample_defender_alert.json`. Evidence type: Defender alert JSON. Severity recommendation: High.\n"
+            "IOCs / Investigation Artifacts Observed:\n"
+            "- Malware / Threat Name: Malware alert indicator; Source: Record 1\n"
+            "Suspicious behaviors:\n"
+            "- Malware or high-severity alert (High): Evidence references malware.; MITRE: Execution: Malicious File; Recommended review: Review affected host.\n"
+        )
+
+        result = answer_question(
+            "Create a Freshservice-style incident note from this evidence.",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=session_context,
+        )
+
+        self.assertEqual(result["detected_intent"], "ticket_generation")
+        self.assertIn("Freshservice-style Ticket Note", result["answer"])
+        self.assertIn("**Subject:**", result["answer"])
+        self.assertIn("**Summary:**", result["answer"])
+        self.assertIn("Recommended Action", result["answer"])
+        self.assertIn("Escalation", result["answer"])
 
     def test_guardrails_block_secret_like_questions_before_llm(self):
         config = CopilotConfig(provider="mock", test_mode=True)

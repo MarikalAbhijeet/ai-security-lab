@@ -1,6 +1,6 @@
 # Security Copilot Chat
 
-Security Copilot Chat is a local-first AI security assistant for the AI Security Lab. It retrieves context from this repository's own docs, READMEs, sample reports, framework notes, KQL notes, PowerShell notes, JSON samples, and CSV samples, then generates source-cited answers.
+Security Copilot Chat is a local-first AI security assistant for the AI Security Lab. It retrieves context from this repository's own docs, READMEs, sample reports, framework notes, SOC playbooks, KQL hunting queries, read-only PowerShell samples, ticket templates, JSON samples, and CSV samples, then generates source-cited answers.
 
 The default LLM provider is local Ollama using `qwen2.5:3b`. Tests and CI use mock mode, so Ollama is not required for automated test runs.
 
@@ -67,10 +67,35 @@ python .\copilot_assistant.py --question "What are the limitations of this lab?"
 
 1. Guardrails inspect the question before retrieval or LLM use.
 2. The retriever indexes safe local files only.
-3. TF-IDF and cosine similarity select the most relevant local chunks.
+3. TF-IDF and cosine similarity select the most relevant local chunks, with SOC-topic boosting for matching playbooks and automation resources.
 4. The assistant builds a constrained prompt from retrieved local context.
 5. Ollama generates an answer locally, or mock mode returns a deterministic test response.
 6. The final Markdown answer includes citations, confidence notes, limitations, and safe-use warnings.
+
+## Local Knowledge Sources
+
+The retriever indexes safe local Markdown, TXT, KQL, PowerShell, JSON, and CSV files. It excludes hidden folders, `.env` files, virtual environments, cache folders, sensitive-looking filenames, and binary files.
+
+Important SOC sources include:
+
+- `docs/soc_playbooks/*.md`
+- `automation/kql/*.kql`
+- `automation/powershell/*.ps1`
+- `automation/ticket-templates/*.md`
+
+For suspicious PowerShell, risky sign-in, phishing, malware, impossible travel, mass file deletion, and evidence-analysis questions, the Copilot prefers matching playbooks and automation references and avoids unrelated prompt-injection samples.
+
+When Threat Evidence Workbench context is active, the Copilot prioritizes:
+
+1. Uploaded evidence summary from the current session
+2. Extracted IOC summary
+3. Matching SOC playbook
+4. Matching KQL file
+5. Matching ticket template
+6. Matching read-only PowerShell sample
+7. General docs
+
+The raw uploaded file is not sent to Ollama and is not saved permanently.
 
 ## Answer Modes
 

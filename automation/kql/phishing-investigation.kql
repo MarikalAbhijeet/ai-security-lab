@@ -1,0 +1,10 @@
+// Sample Microsoft 365 Defender-style phishing investigation query.
+// Demo only. Use safe domains such as example.invalid.
+EmailEvents
+| where RecipientEmailAddress =~ "user@example.com"
+    or SenderFromDomain =~ "example.invalid"
+| join kind=leftouter EmailUrlInfo on NetworkMessageId
+| join kind=leftouter EmailAttachmentInfo on NetworkMessageId
+| project Timestamp, SenderFromAddress, SenderFromDomain, RecipientEmailAddress,
+          Subject, DeliveryAction, ThreatTypes, Url, FileName, SHA256, AuthenticationDetails
+| order by Timestamp desc

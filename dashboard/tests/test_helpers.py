@@ -18,6 +18,13 @@ from helpers import (  # noqa: E402
     load_uploaded_json,
     validate_sample_file,
 )
+from app import (  # noqa: E402
+    extract_fenced_kql,
+    get_analysis_findings,
+    get_analysis_ioc_counts,
+    get_analysis_risk_scores,
+    get_highest_priority_finding,
+)
 
 
 class DashboardHelperTests(unittest.TestCase):
@@ -93,6 +100,44 @@ class DashboardHelperTests(unittest.TestCase):
 
         self.assertIn("--input", command)
         self.assertIn(str(sample_path), command)
+
+    def test_dashboard_analysis_helpers_handle_missing_optional_fields(self):
+        class MinimalAnalysis:
+            pass
+
+        analysis = MinimalAnalysis()
+
+        self.assertEqual(get_analysis_risk_scores(analysis), [])
+        self.assertEqual(get_analysis_ioc_counts(analysis)["total_ips"], 0)
+        self.assertIn("No suspicious behavior", get_highest_priority_finding(analysis))
+
+    def test_dashboard_filters_streamlit_delta_generator_like_behaviors(self):
+        class DeltaGenerator:
+            __module__ = "streamlit.delta_generator"
+
+        class Finding:
+            title = "Failed MFA"
+            severity = "Medium"
+            mitre_attack = "Credential Access"
+            recommendation = "Review MFA context."
+
+        class Analysis:
+            findings = [DeltaGenerator(), Finding()]
+
+        findings = get_analysis_findings(Analysis())
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].title, "Failed MFA")
+
+    def test_extract_fenced_kql_returns_query_only(self):
+        answer = "### Recommended KQL\n```kql\nSigninLogs\n| take 10\n```\nMore text"
+
+        query = extract_fenced_kql(answer)
+
+        self.assertEqual(query, "SigninLogs\n| take 10")
+
+    def test_extract_fenced_kql_handles_missing_block(self):
+        self.assertEqual(extract_fenced_kql("No query here."), "")
 
 
 if __name__ == "__main__":
