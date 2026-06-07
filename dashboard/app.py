@@ -27,6 +27,12 @@ from config import load_config  # noqa: E402
 from copilot_assistant import ANSWER_MODES, answer_question, render_markdown  # noqa: E402
 from ollama_client import SETUP_INSTRUCTIONS, check_ollama_status  # noqa: E402
 
+EVIDENCE_ANALYZER_DIR = REPO_ROOT / "evidence_analyzer"
+if str(EVIDENCE_ANALYZER_DIR) not in sys.path:
+    sys.path.insert(0, str(EVIDENCE_ANALYZER_DIR))
+
+from evidence_summarizer import analyze_evidence  # noqa: E402
+
 
 EXAMPLE_PROMPTS = {
     "Investigate risky sign-in": "What should an analyst check when investigating a risky sign-in?",
@@ -46,10 +52,15 @@ def main() -> None:
         "and sample SOC workflows."
     )
 
-    reports_tab, copilot_tab = st.tabs(["Security Analysis Modules", "Local SecOps Copilot"])
+    reports_tab, evidence_tab, copilot_tab = st.tabs(
+        ["Security Analysis Modules", "Threat Evidence Workbench", "Local SecOps Copilot"]
+    )
 
     with reports_tab:
         render_project_reports()
+
+    with evidence_tab:
+        render_threat_evidence_workbench()
 
     with copilot_tab:
         render_copilot_chat()
@@ -114,6 +125,111 @@ def render_project_reports() -> None:
             st.code(report, language="markdown")
 
 
+def render_threat_evidence_workbench() -> None:
+    """Render local-only uploaded evidence analysis."""
+    st.subheader("Threat Evidence Workbench")
+    st.write(
+        "Upload fake/sample JSON, CSV, TXT, or LOG evidence for local rule-based threat analysis. "
+        "Uploaded files are processed in memory for this dashboard session and are not saved permanently."
+    )
+    st.warning(
+        "Do not upload secrets, passwords, tokens, API keys, company logs, client data, tenant data, "
+        "production logs, or vendor confidential data. Sensitive-looking content is blocked before analysis."
+    )
+    st.caption("Supported file types: `.json`, `.csv`, `.txt`, `.log`. Maximum file size: 5 MB.")
+
+    uploaded_file = st.file_uploader(
+        "Upload threat evidence",
+        type=["json", "csv", "txt", "log"],
+        key="threat_evidence_upload",
+    )
+
+    if uploaded_file is None:
+        st.info("Upload a fake/sample evidence file to generate a local report.")
+        return
+
+    st.write(f"Selected file: `{uploaded_file.name}`")
+    st.caption("The uploaded file name is displayed for the current session only; the file is not written to disk.")
+
+    if st.button("Analyze evidence", type="primary"):
+        try:
+            analysis = analyze_evidence(uploaded_file.name, uploaded_file.getvalue())
+        except ValueError as error:
+            st.error(str(error))
+            st.session_state.pop("evidence_analysis", None)
+            st.session_state.pop("copilot_session_context", None)
+            return
+        st.session_state["evidence_analysis"] = analysis
+        st.session_state["copilot_session_context"] = analysis.copilot_context
+
+    analysis = st.session_state.get("evidence_analysis")
+    if not analysis:
+        return
+
+    summary_left, summary_right = st.columns(2)
+    with summary_left:
+        st.metric("Detected Evidence Type", analysis.evidence_type)
+        st.metric("Total Records/Lines", analysis.total_items)
+    with summary_right:
+        st.metric("Severity Recommendation", analysis.severity)
+        st.metric("Suspicious Findings", len(analysis.findings))
+
+    st.markdown("### Indicators and Investigation Artifacts")
+    st.caption("All sample IOCs shown here are fake/demo values. URLs, domains, and IP-like values are defanged for display.")
+    if analysis.iocs:
+        ioc_types = ["All"] + sorted({item.type for item in analysis.iocs})
+        selected_ioc_type = st.selectbox("IOC table filter", options=ioc_types, index=0)
+        visible_iocs = analysis.iocs if selected_ioc_type == "All" else [
+            item for item in analysis.iocs if item.type == selected_ioc_type
+        ]
+        ioc_rows = [
+            {
+                "Type": item.type,
+                "Value": item.display_value,
+                "Source / Context": item.source,
+                "Why It Matters": item.why_it_matters,
+            }
+            for item in visible_iocs[:50]
+        ]
+        st.dataframe(ioc_rows, width="stretch", hide_index=True)
+    else:
+        st.write("No IOCs or investigation artifacts were extracted by the local rule set.")
+
+    with st.expander("IOC Summary Counts", expanded=False):
+        st.write(f"- Total IPs found: `{analysis.ioc_summary_counts['total_ips']}`")
+        st.write(f"- Total URLs/domains found: `{analysis.ioc_summary_counts['total_urls_domains']}`")
+        st.write(f"- Total users found: `{analysis.ioc_summary_counts['total_users']}`")
+        st.write(f"- Total devices found: `{analysis.ioc_summary_counts['total_devices']}`")
+        st.write(
+            "- Total suspicious command indicators found: "
+            f"`{analysis.ioc_summary_counts['total_suspicious_command_indicators']}`"
+        )
+
+    st.markdown("### Suspicious Findings")
+    if analysis.findings:
+        for finding in analysis.findings[:10]:
+            with st.container(border=True):
+                st.markdown(f"**{finding.title}** ({finding.severity})")
+                st.write(finding.description)
+                st.caption(f"MITRE ATT&CK: {finding.mitre_attack}")
+    else:
+        st.write("No suspicious findings were detected by the local rule set.")
+
+    st.markdown("### Generated Evidence Report")
+    st.markdown(analysis.markdown_report)
+    with st.expander("Raw Markdown Evidence Report", expanded=False):
+        st.code(analysis.markdown_report, language="markdown")
+
+    st.info("Local SecOps Copilot will receive only the summarized evidence context, not the raw uploaded file.")
+    if st.button("Ask Local SecOps Copilot about this evidence"):
+        st.session_state["copilot_session_context"] = analysis.copilot_context
+        st.session_state["pending_copilot_question"] = (
+            "Analyze the uploaded evidence summary from the current session. "
+            "What suspicious behavior should a SOC analyst prioritize?"
+        )
+        st.success("Evidence summary is ready for Local SecOps Copilot. Open the Copilot tab to review the answer.")
+
+
 def render_copilot_chat() -> None:
     st.subheader("Local SecOps Copilot")
     st.write(
@@ -140,6 +256,16 @@ def render_copilot_chat() -> None:
 
     if "copilot_messages" not in st.session_state:
         st.session_state["copilot_messages"] = []
+
+    session_context = st.session_state.get("copilot_session_context", "")
+    if session_context:
+        context_left, context_right = st.columns([4, 1])
+        with context_left:
+            st.info("Threat Evidence Workbench summary is active for this chat session. Raw uploaded file content is not sent.")
+        with context_right:
+            if st.button("Clear evidence context"):
+                st.session_state.pop("copilot_session_context", None)
+                st.rerun()
 
     controls_left, controls_right = st.columns([4, 1])
     with controls_left:
@@ -193,6 +319,7 @@ def render_copilot_chat() -> None:
                 answer_mode=answer_mode,
                 top_k=top_k,
                 config=config,
+                session_context=session_context,
             )
         except ValueError as error:
             st.error(str(error))
@@ -237,7 +364,13 @@ def render_provider_status(status) -> None:
         st.write(f"- Last error: `{status.last_error or 'None'}`")
 
 
-def generate_copilot_answer(question: str, answer_mode: str, top_k: int, config: object) -> dict:
+def generate_copilot_answer(
+    question: str,
+    answer_mode: str,
+    top_k: int,
+    config: object,
+    session_context: str | None = None,
+) -> dict:
     """Generate an answer while displaying a clear local-model loading state."""
     start_time = time.monotonic()
     loading_panel = st.empty()
@@ -254,6 +387,7 @@ def generate_copilot_answer(question: str, answer_mode: str, top_k: int, config:
                 index_root=Path(REPO_ROOT),
                 top_k=top_k,
                 config=config,
+                session_context=session_context,
             )
 
         elapsed_seconds = time.monotonic() - start_time

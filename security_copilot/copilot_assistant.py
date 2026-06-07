@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from config import CopilotConfig, load_config
-from guardrails import evaluate_question
+from guardrails import BLOCK_PATTERNS, evaluate_question
 from ollama_client import SETUP_INSTRUCTIONS, chat, provider_status
 from retriever import REPO_ROOT, citations, confidence_note, retrieve
 
@@ -25,11 +25,19 @@ ANSWER_MODES = [
 ]
 
 
-def answer_question(question: str, answer_mode="SOC Analyst", top_k=5, index_root=None, config: CopilotConfig | None = None) -> dict:
+def answer_question(
+    question: str,
+    answer_mode="SOC Analyst",
+    top_k=5,
+    index_root=None,
+    config: CopilotConfig | None = None,
+    session_context: str | None = None,
+) -> dict:
     """Run guardrails, retrieval, and local LLM synthesis."""
     answer_mode = validate_answer_mode(answer_mode)
     config = config or load_config()
     guardrail = evaluate_question(question)
+    safe_session_context = validate_session_context(session_context)
 
     if not guardrail.allowed:
         return build_result(
@@ -46,22 +54,60 @@ def answer_question(question: str, answer_mode="SOC Analyst", top_k=5, index_roo
         )
 
     status = provider_status(config)
-    chunks = retrieve(guardrail.sanitized_question, index_root=index_root, top_k=top_k)
-    source_citations = citations(chunks)
-    retrieval_confidence = confidence_note(chunks)
-    context = format_context(chunks)
+    evidence_focused = is_evidence_focused_question(guardrail.sanitized_question, safe_session_context)
+    chunks = [] if evidence_focused else retrieve(guardrail.sanitized_question, index_root=index_root, top_k=top_k)
+    source_citations = []
+    if safe_session_context and evidence_focused:
+        source_citations.insert(
+            0,
+            {
+                "path": "Uploaded evidence summary from current session",
+                "heading": "Threat Evidence Workbench",
+                "score": 1.0,
+            },
+        )
+    else:
+        source_citations = citations(chunks)
+        if safe_session_context:
+            source_citations.insert(
+                0,
+                {
+                    "path": "Uploaded evidence summary from current session",
+                    "heading": "Threat Evidence Workbench",
+                    "score": 1.0,
+                },
+            )
+    retrieval_confidence = "Evidence-focused answer: cited current-session evidence summary only." if evidence_focused else confidence_note(chunks)
+    if safe_session_context and not evidence_focused:
+        retrieval_confidence = f"{retrieval_confidence} Current-session evidence summary was also provided to the model."
+    context = "" if evidence_focused else format_context(chunks)
+    if safe_session_context and evidence_focused:
+        context = "[Uploaded Evidence Summary from current session]\n" + safe_session_context
+    elif safe_session_context:
+        context = "\n\n".join(
+            [
+                context,
+                "[Uploaded Evidence Summary from current session]\n" + safe_session_context,
+            ]
+        )
 
-    if not chunks or (chunks and chunks[0].score < 0.03):
+    has_context = bool(safe_session_context) or (chunks and chunks[0].score >= 0.03)
+    if not has_context:
         answer = "I do not have enough local AI Security Lab context to answer that question confidently."
         setup_required = False
     else:
         llm_response = chat(config, guardrail.sanitized_question, answer_mode, context, status=status)
         answer = llm_response.answer
+        if safe_session_context:
+            if evidence_focused:
+                answer = build_evidence_focused_answer(safe_session_context, answer)
+            else:
+                answer = append_session_ioc_section(answer, safe_session_context)
         setup_required = llm_response.setup_required
         timed_out = llm_response.timed_out
         generation_error = llm_response.last_error
 
-    if not chunks or (chunks and chunks[0].score < 0.03):
+    if not has_context:
         timed_out = False
         generation_error = ""
 
@@ -220,6 +266,214 @@ def validate_answer_mode(answer_mode: str) -> str:
     if answer_mode not in ANSWER_MODES:
         raise ValueError("Answer mode must be one of: " + ", ".join(ANSWER_MODES))
     return answer_mode
+
+
+def validate_session_context(session_context: str | None) -> str:
+    """Validate bounded temporary dashboard context."""
+    if session_context is None:
+        return ""
+    if not isinstance(session_context, str):
+        raise ValueError("Session context must be text.")
+    context = session_context.strip()
+    if not context:
+        return ""
+    if len(context) > 5000:
+        raise ValueError("Session context is too large for local Copilot analysis.")
+    for label, pattern in BLOCK_PATTERNS:
+        if pattern.search(context):
+            raise ValueError(f"Session context contains possible {label} content and cannot be sent to the local model.")
+    return context
+
+
+def append_session_ioc_section(answer: str, session_context: str) -> str:
+    """Ensure uploaded-evidence answers explicitly include extracted IOCs."""
+    ioc_lines = extract_session_ioc_lines(session_context)
+    if not ioc_lines:
+        return answer
+    heading = "## IOCs / Investigation Artifacts Observed"
+    section_heading = "### Extracted From Threat Evidence Workbench Summary" if heading in answer else heading
+    section = "\n".join(["", section_heading, *ioc_lines])
+    return answer.rstrip() + "\n\n" + section
+
+
+def build_evidence_focused_answer(session_context: str, _model_answer: str) -> str:
+    """Build a deterministic SOC answer from safe uploaded evidence context."""
+    ioc_lines = extract_session_ioc_lines(session_context)
+    behavior_lines = extract_session_behavior_lines(session_context)
+    metadata = extract_session_metadata(session_context)
+    mitre_lines = extract_mitre_lines(behavior_lines)
+    priority = highest_priority_finding(ioc_lines, behavior_lines)
+    evidence_observed = evidence_observed_lines(ioc_lines, behavior_lines)
+    actions = recommended_soc_actions(ioc_lines, behavior_lines)
+    ticket_note = build_ticket_note(metadata, priority, ioc_lines, behavior_lines)
+
+    sections = [
+        "## Highest Priority Finding",
+        priority,
+        "## Why this matters",
+        why_this_matters(ioc_lines, behavior_lines),
+        "## Evidence Observed",
+        "\n".join(evidence_observed) if evidence_observed else "- No concrete evidence lines were available in the session summary.",
+        "## IOCs / Investigation Artifacts Observed",
+        "\n".join(ioc_lines) if ioc_lines else "- No IOCs were extracted by the local rule set.",
+        "## Recommended SOC Actions",
+        "\n".join(actions),
+        "## MITRE ATT&CK Mapping",
+        "\n".join(mitre_lines) if mitre_lines else "- No MITRE mapping was present in the uploaded evidence summary.",
+        "## Freshservice Ticket Note",
+        ticket_note,
+        "## Human Review Warning",
+        "This response is based on a local, summarized evidence context from Threat Evidence Workbench. Validate all findings with a human analyst before operational action.",
+    ]
+    return "\n\n".join(sections)
+
+
+def extract_session_ioc_lines(session_context: str) -> list[str]:
+    """Extract safe IOC lines from the bounded session summary."""
+    lines = []
+    capture = False
+    for line in session_context.splitlines():
+        if line.strip() == "IOCs / Investigation Artifacts Observed:":
+            capture = True
+            continue
+        if capture and line.strip() == "Suspicious behaviors:":
+            break
+        if capture and line.startswith("- "):
+            lines.append(line)
+    return lines[:20]
+
+
+def extract_session_behavior_lines(session_context: str) -> list[str]:
+    """Extract suspicious behavior lines from the bounded session summary."""
+    lines = []
+    capture = False
+    for line in session_context.splitlines():
+        if line.strip() == "Suspicious behaviors:":
+            capture = True
+            continue
+        if capture and line.startswith("The Copilot answer must include"):
+            break
+        if capture and line.startswith("- "):
+            lines.append(line)
+    return lines[:12]
+
+
+def extract_session_metadata(session_context: str) -> dict[str, str]:
+    """Extract simple metadata from the evidence summary."""
+    metadata = {}
+    for line in session_context.splitlines():
+        if ": " in line and not line.startswith("- "):
+            key, value = line.split(": ", 1)
+            metadata[key.strip().lower()] = value.strip()
+    return metadata
+
+
+def extract_mitre_lines(behavior_lines: list[str]) -> list[str]:
+    """Extract MITRE mapping snippets from behavior lines."""
+    mappings = []
+    for line in behavior_lines:
+        marker = "MITRE: "
+        if marker in line:
+            mapping = line.split(marker, 1)[1].split("; ", 1)[0].strip()
+            if mapping and f"- {mapping}" not in mappings:
+                mappings.append(f"- {mapping}")
+    return mappings
+
+
+def highest_priority_finding(ioc_lines: list[str], behavior_lines: list[str]) -> str:
+    """Select the highest priority evidence finding."""
+    joined = "\n".join(ioc_lines + behavior_lines).lower()
+    if "encodedcommand" in joined or "executionpolicy bypass" in joined or "invoke-webrequest" in joined:
+        details = []
+        if contains_value(ioc_lines, "WINWORD.EXE") and contains_value(ioc_lines, "powershell.exe"):
+            details.append("WINWORD.EXE spawning powershell.exe")
+        if "encodedcommand" in joined:
+            details.append("encoded PowerShell")
+        if "executionpolicy bypass" in joined:
+            details.append("ExecutionPolicy Bypass")
+        if "invoke-webrequest" in joined or "downloadstring" in joined:
+            details.append("Invoke-WebRequest/download behavior")
+        return "- Suspicious PowerShell execution chain observed: " + ", ".join(details) + "."
+    if any(term in joined for term in ("successful login after failures", "failed mfa", "impossible travel", "new device", "risky country")):
+        return "- Suspicious sign-in pattern observed with authentication risk indicators from the uploaded evidence."
+    if "malware" in joined or "threat name" in joined:
+        return "- Malware or Defender threat indicator observed in the uploaded evidence summary."
+    return behavior_lines[0] if behavior_lines else "- Uploaded evidence contains extracted IOCs that require analyst review."
+
+
+def why_this_matters(ioc_lines: list[str], behavior_lines: list[str]) -> str:
+    """Return SOC impact explanation based on evidence."""
+    joined = "\n".join(ioc_lines + behavior_lines).lower()
+    reasons = []
+    if "winword.exe" in joined and "powershell.exe" in joined:
+        reasons.append("Office spawning PowerShell can indicate macro-driven execution or user-initiated payload staging.")
+    if "encodedcommand" in joined or "executionpolicy bypass" in joined:
+        reasons.append("Encoded PowerShell and policy bypass are common obfuscation and defense-evasion signals.")
+    if "invoke-webrequest" in joined or "downloadstring" in joined:
+        reasons.append("Download behavior can indicate payload retrieval or command-and-control staging.")
+    if "failed mfa" in joined or "impossible travel" in joined or "successful login after failures" in joined:
+        reasons.append("Authentication anomalies can indicate credential misuse or account takeover.")
+    if "malware" in joined:
+        reasons.append("Malware indicators require endpoint containment and timeline review.")
+    if not reasons:
+        reasons.append("The extracted indicators provide pivot points for identity, endpoint, network, and ticket review.")
+    return "\n".join(f"- {reason}" for reason in reasons)
+
+
+def evidence_observed_lines(ioc_lines: list[str], behavior_lines: list[str]) -> list[str]:
+    """Build concrete evidence observations."""
+    observations = []
+    joined = "\n".join(ioc_lines + behavior_lines)
+    for value in ("WINWORD.EXE", "powershell.exe", "EncodedCommand", "-ExecutionPolicy Bypass", "Invoke-WebRequest", "DownloadString"):
+        if value in joined:
+            observations.append(f"- Observed `{value}` in the uploaded evidence summary.")
+    for line in behavior_lines[:6]:
+        observations.append(line)
+    return observations
+
+
+def recommended_soc_actions(ioc_lines: list[str], behavior_lines: list[str]) -> list[str]:
+    """Return evidence-specific SOC actions."""
+    joined = "\n".join(ioc_lines + behavior_lines).lower()
+    actions = [
+        "- Pivot on the listed user, device, process, IP, URL/domain, and file path artifacts in Defender/Sentinel.",
+        "- Preserve the evidence summary and document triage decisions in the ticket.",
+    ]
+    if "winword.exe" in joined and "powershell.exe" in joined:
+        actions.insert(0, "- Review the endpoint process tree for WINWORD.EXE spawning powershell.exe and confirm whether a document or macro initiated execution.")
+    if "encodedcommand" in joined:
+        actions.insert(1, "- Decode the encoded PowerShell safely in a lab and compare it with script block and command-line telemetry.")
+    if "invoke-webrequest" in joined or "downloadstring" in joined:
+        actions.insert(2, "- Investigate download behavior, block or review the defanged URL/domain, and look for payload writes on the endpoint.")
+    if "failed mfa" in joined or "impossible travel" in joined or "successful login after failures" in joined:
+        actions.insert(0, "- Review sign-in timeline, MFA results, device state, source IPs, travel context, and recent privileged activity for the user.")
+    if "malware" in joined:
+        actions.insert(0, "- Check Defender alert timeline, malware name, file hash, quarantine status, and device isolation needs.")
+    return actions
+
+
+def build_ticket_note(metadata: dict[str, str], priority: str, ioc_lines: list[str], behavior_lines: list[str]) -> str:
+    """Build a Freshservice-style ticket note."""
+    file_name = metadata.get("file name", "uploaded evidence")
+    severity = metadata.get("severity recommendation", "Review needed")
+    ioc_preview = "; ".join(line.removeprefix("- ") for line in ioc_lines[:5]) or "No IOCs extracted"
+    behavior_preview = "; ".join(line.removeprefix("- ") for line in behavior_lines[:3]) or "No suspicious behaviors extracted"
+    return (
+        f"Reviewed `{file_name}` in Threat Evidence Workbench. Severity recommendation: {severity}. "
+        f"Highest priority: {priority.removeprefix('- ')} "
+        f"Key IOCs: {ioc_preview}. Suspicious behaviors: {behavior_preview}. "
+        "Local-only summarized evidence was used; human validation required."
+    )
+
+
+def contains_value(lines: list[str], value: str) -> bool:
+    """Return True when a value appears in IOC lines."""
+    return any(value in line for line in lines)
+
+
+def is_evidence_focused_question(question: str, session_context: str) -> bool:
+    """Return True when a question should cite only current-session evidence."""
+    return bool(session_context)
 
 
 def default_next_steps(answer_mode: str) -> list[str]:

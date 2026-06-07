@@ -51,6 +51,114 @@ class CopilotAssistantTests(unittest.TestCase):
         self.assertIn("Do not enter secrets", result["safety_note"])
         self.assertEqual(result["provider"], "mock")
 
+    def test_session_evidence_context_is_cited_without_indexing_raw_file(self):
+        config = CopilotConfig(provider="mock", test_mode=True)
+        session_context = (
+            "Uploaded evidence summary from current session.\n"
+            "File name: sample_powershell_events.log\n"
+            "IOCs / Investigation Artifacts Observed:\n"
+            "- Process: powershell.exe; Source: Line 1; Why it matters: Process artifact.\n"
+            "- Command-Line Indicator: EncodedCommand; Source: Line 1; Why it matters: Suspicious PowerShell.\n"
+            "Suspicious behaviors:\n"
+            "Suspicious indicators:\n"
+            "- Encoded PowerShell command (High): encoded command observed."
+        )
+
+        result = answer_question(
+            "Based on the uploaded evidence, list the IOCs and tell me what to prioritize.",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=session_context,
+        )
+
+        self.assertEqual(result["sources"][0]["path"], "Uploaded evidence summary from current session")
+        self.assertEqual(len(result["sources"]), 1)
+        self.assertIn("current-session evidence summary only", result["retrieval_confidence"])
+        for heading in (
+            "## Highest Priority Finding",
+            "## Why this matters",
+            "## Evidence Observed",
+            "## IOCs / Investigation Artifacts Observed",
+            "## Recommended SOC Actions",
+            "## MITRE ATT&CK Mapping",
+            "## Freshservice Ticket Note",
+            "## Human Review Warning",
+        ):
+            self.assertIn(heading, result["answer"])
+        self.assertIn("## IOCs / Investigation Artifacts Observed", result["answer"])
+        self.assertIn("EncodedCommand", result["answer"])
+        self.assertNotIn("## Local Model Notes", result["answer"])
+
+    def test_active_evidence_context_prioritizes_vague_follow_up(self):
+        config = CopilotConfig(provider="mock", test_mode=True)
+        session_context = (
+            "Uploaded evidence summary from current session.\n"
+            "File name: sample_powershell_events.log\n"
+            "Detected evidence type: PowerShell event log\n"
+            "IOCs / Investigation Artifacts Observed:\n"
+            "- User: devon[.]kim@example[.]test; Source: Line 1\n"
+            "- Device / Host: LAB-ENDPOINT-02; Source: Line 1\n"
+            "- Parent Process: WINWORD.EXE; Source: Line 1\n"
+            "- Process: powershell.exe; Source: Line 1\n"
+            "- Command-Line Indicator: EncodedCommand; Source: Line 1\n"
+            "- Command-Line Indicator: Invoke-WebRequest; Source: Line 3\n"
+            "Suspicious behaviors:\n"
+            "- Encoded PowerShell command (High): encoded command observed.; MITRE: Defense Evasion: Obfuscated Files or Information; Recommended review: Decode safely in a lab.\n"
+        )
+
+        result = answer_question(
+            "What should I investigate first?",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=session_context,
+        )
+
+        self.assertEqual(len(result["sources"]), 1)
+        self.assertEqual(result["sources"][0]["path"], "Uploaded evidence summary from current session")
+        self.assertIn("devon[.]kim@example[.]test", result["answer"])
+        self.assertIn("LAB-ENDPOINT-02", result["answer"])
+        self.assertIn("WINWORD.EXE", result["answer"])
+        self.assertIn("powershell.exe", result["answer"])
+        self.assertIn("EncodedCommand", result["answer"])
+        self.assertIn("Invoke-WebRequest", result["answer"])
+        self.assertNotIn("prompt-injection", "\n".join(source["path"] for source in result["sources"]).lower())
+
+    def test_signin_evidence_context_drives_specific_answer(self):
+        config = CopilotConfig(provider="mock", test_mode=True)
+        session_context = (
+            "Uploaded evidence summary from current session.\n"
+            "File name: sample_signin_logs.csv\n"
+            "Detected evidence type: Entra sign-in style logs\n"
+            "Severity recommendation: High\n"
+            "IOCs / Investigation Artifacts Observed:\n"
+            "- User: jordan[.]lee@example[.]test; Source: Record 2\n"
+            "- IP Address: 203[.]0[.]113[.]44; Source: Record 2\n"
+            "- Device / Host: UNKNOWN-DEVICE; Source: Record 2\n"
+            "Suspicious behaviors:\n"
+            "- Multiple failed logins (Medium): Repeated failed authentication attempts were observed.; MITRE: Credential Access: Brute Force; Recommended review: Review sign-in history, source IP, user risk, and MFA prompts.\n"
+            "- Successful login after failures (High): A successful login occurred after earlier failed attempts in the same evidence set.; MITRE: Credential Access: Brute Force; Recommended review: Validate the successful session, reset credentials if suspicious, and revoke sessions.\n"
+            "- Failed MFA (Medium): MFA failure or denial was observed.; MITRE: Credential Access: Multi-Factor Authentication Request Generation; Recommended review: Check for MFA fatigue, unfamiliar device, and suspicious source IP.\n"
+            "- Impossible travel indicator (High): The evidence suggests geographically impossible travel.; MITRE: Initial Access: Valid Accounts; Recommended review: Compare sign-in timestamps, IPs, countries, and device identifiers.\n"
+            "- New device indicator (Medium): The activity references a new or unfamiliar device.; MITRE: Initial Access: Valid Accounts; Recommended review: Confirm device ownership and review conditional access context.\n"
+            "- Risky country indicator (High): The activity references a risky or unusual country.; MITRE: Initial Access: Valid Accounts; Recommended review: Review geolocation, travel patterns, and impossible travel context."
+        )
+
+        result = answer_question(
+            "Which user looks most suspicious in the uploaded evidence and why?",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=session_context,
+        )
+
+        self.assertEqual(len(result["sources"]), 1)
+        self.assertIn("jordan[.]lee@example[.]test", result["answer"])
+        self.assertIn("Multiple failed logins", result["answer"])
+        self.assertIn("Successful login after failures", result["answer"])
+        self.assertIn("Failed MFA", result["answer"])
+        self.assertIn("Impossible travel", result["answer"])
+        self.assertIn("New device", result["answer"])
+        self.assertIn("Risky country", result["answer"])
+
     def test_guardrails_block_secret_like_questions_before_llm(self):
         config = CopilotConfig(provider="mock", test_mode=True)
 

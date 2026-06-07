@@ -18,6 +18,7 @@ The lab reflects a profile focused on Security Operations, Microsoft Defender, M
 | [`03-prompt-injection-lab`](03-prompt-injection-lab/README.md) | Evaluates safe sample prompt injection tests and maps findings to AI security concepts. | OWASP LLM Top 10, MITRE ATLAS-style mapping, defensive AI patterns |
 | [`04-ai-vendor-risk-toolkit`](04-ai-vendor-risk-toolkit/README.md) | Scores fake AI vendor profiles and generates Markdown risk reports. | Vendor risk governance, IAM review, data protection, logging, compliance review |
 | [`05-ml-anomaly-detection`](05-ml-anomaly-detection/README.md) | Uses IsolationForest to score fake/synthetic security logs for unusual activity. | ML-assisted SOC triage, anomaly scoring, human review limits |
+| [`evidence_analyzer`](evidence_analyzer/README.md) | Parses fake/sample JSON, CSV, TXT, or LOG evidence and generates IOC-focused local threat summaries for the dashboard. | Evidence handling, IOC extraction, local parsing, threat rules, Copilot-safe context summaries |
 | [`security_copilot`](security_copilot/README.md) | Local-first Security Copilot that retrieves repo context and can answer through Ollama using `qwen2.5:3b`. | Local RAG, Ollama, source citation, guardrails, safe AI usage |
 
 ## Why This Project Matters
@@ -46,6 +47,7 @@ The repository is intentionally local, transparent, and rule-based. That makes i
 - scikit-learn IsolationForest modeling on synthetic security data
 - pandas-based CSV validation and feature preparation
 - Local-first RAG orchestration with TF-IDF retrieval, Ollama, guardrails, and source-cited answers
+- Local evidence upload handling with safe parsing, IOC extraction, sensitive-content blocking, and temporary session-only Copilot context
 
 ## Frameworks And Concepts
 
@@ -144,6 +146,7 @@ The Streamlit dashboard is branded as **AI Security Command Center** and is avai
 The dashboard includes:
 
 - `Security Analysis Modules` for analyzer reports.
+- `Threat Evidence Workbench` for local upload analysis of fake/sample JSON, CSV, TXT, or LOG evidence.
 - `Local SecOps Copilot` for local Ollama-powered, source-cited questions over repository documentation and sample lab files.
 - Compact Ollama readiness status with detailed provider diagnostics hidden under `Provider Debug Details`.
 - Example Copilot prompt buttons, a visible local-model loading panel, and a Clear chat control.
@@ -163,6 +166,8 @@ python -m streamlit run .\dashboard\app.py
 ```
 
 The dashboard is local-only. Uploads are parsed in memory and are not saved to the repository. Do not upload or type real secrets, passwords, tokens, company data, client data, tenant data, or vendor confidential data. The dashboard does not call paid APIs, Microsoft services, vendor portals, or live security systems. Security Copilot uses local repository context and local Ollama when enabled; tests use mock mode and do not require Ollama.
+
+Threat Evidence Workbench passes only a bounded summarized evidence context to Local SecOps Copilot. It does not permanently save uploaded files, index raw uploaded files into RAG, or send evidence to external services.
 
 ## Screenshots
 
@@ -209,6 +214,7 @@ The tools do not connect to Microsoft Defender, Microsoft Sentinel, Entra ID, Ex
 - [Demo walkthrough](docs/demo_walkthrough.md)
 - [Testing guide](docs/testing_guide.md)
 - [Local startup guide](docs/local_startup_guide.md)
+- [Threat Evidence Workbench](evidence_analyzer/README.md)
 
 ## Future Roadmap
 

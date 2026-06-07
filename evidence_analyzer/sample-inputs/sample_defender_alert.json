@@ -1,0 +1,11 @@
+{
+  "alertTitle": "Malware detected on sample endpoint",
+  "alertSeverity": "High",
+  "providerName": "Microsoft Defender for Endpoint sample",
+  "deviceName": "LAB-ENDPOINT-07",
+  "user": "casey.morgan@example.test",
+  "category": "Malware",
+  "fileName": "sample-loader.exe",
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "riskNotes": "Synthetic sample alert only. No real tenant or production data."
+}

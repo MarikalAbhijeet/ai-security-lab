@@ -1,0 +1,4 @@
+timestamp,user,source_ip,country,device_id,failed_login_count,mfa_result,success_after_failures,new_device_flag,risky_country_flag,impossible_travel_flag,admin_action
+2026-01-15T08:13:00Z,alex.chen@example.test,198.51.100.24,United States,LAB-WIN-101,0,success,false,false,false,false,none
+2026-01-15T08:17:00Z,jordan.lee@example.test,203.0.113.44,Testland,UNKNOWN-DEVICE,7,failed,true,true,true,true,none
+2026-01-15T09:02:00Z,sam.rivera@example.test,192.0.2.88,United States,LAB-WIN-205,2,success,false,false,false,false,role assignment review

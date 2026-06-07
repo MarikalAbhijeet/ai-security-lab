@@ -11,6 +11,7 @@ The dashboard can use fake/sample JSON files already stored in this repository o
 - Prompt Injection Lab
 - AI Vendor Risk Toolkit
 - ML Anomaly Detection
+- Threat Evidence Workbench
 - Local SecOps Copilot
 
 ## Setup
@@ -54,6 +55,7 @@ Then open the local URL shown by Streamlit.
 ## Dashboard Tabs
 
 - `Security Analysis Modules`: run the local project analyzers and view Markdown reports.
+- `Threat Evidence Workbench`: upload fake/sample JSON, CSV, TXT, or LOG evidence for local threat analysis.
 - `Local SecOps Copilot`: ask a question, choose an answer mode, retrieve local source files, and generate a source-cited answer through local Ollama or mock mode.
 
 ## Input Options
@@ -77,6 +79,19 @@ Sample mode keeps the existing local workflow and runs the matching analyzer scr
 Uploaded JSON is parsed and validated in memory. The dashboard does not save uploaded custom JSON files to the repository, does not overwrite sample files, and does not use the uploaded filename as a filesystem path.
 
 The ML Anomaly Detection project currently uses the included synthetic CSV sample from `05-ml-anomaly-detection/sample-inputs`.
+
+## Threat Evidence Workbench
+
+Threat Evidence Workbench supports local-only analysis for fake/sample evidence files:
+
+- `.json`
+- `.csv`
+- `.txt`
+- `.log`
+
+The dashboard validates file type and size, parses the uploaded evidence in memory, blocks sensitive-looking content, extracts IOCs and investigation artifacts, runs rule-based detections, and generates a Markdown evidence report. Uploaded files are not saved permanently and are not indexed into the repository RAG store.
+
+When you select `Ask Local SecOps Copilot about this evidence`, the Copilot receives only the summarized evidence and IOC context from the current session. The raw full uploaded file is not sent to the Copilot prompt and is not written to disk.
 
 ## Local SecOps Copilot
 
@@ -115,6 +130,7 @@ The `Retrieved sources` slider is hidden under `Advanced Settings` because large
 - If using upload mode, upload fake/sample JSON only.
 - Do not add or upload real company data, client data, vendor confidential data, secrets, passwords, tokens, API keys, internal policies, or production logs.
 - Do not type real company data, client data, tenant data, vendor confidential data, secrets, passwords, tokens, API keys, internal policies, or production logs into Local SecOps Copilot.
+- Do not upload real evidence files, company logs, tenant data, client data, vendor confidential data, secrets, passwords, tokens, or API keys into Threat Evidence Workbench.
 - The dashboard runs local Python scripts only and displays the generated Markdown report in the app.
 - Security Copilot sends prompts only to local Ollama when enabled. It does not use paid APIs or cloud LLM keys.
 
