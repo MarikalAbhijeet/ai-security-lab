@@ -176,7 +176,7 @@ class DashboardHelperTests(unittest.TestCase):
     def test_dashboard_email_enrichment_enabled_without_keys_is_not_configured(self):
         sample_path = DASHBOARD_ROOT.parent / "email_analyzer" / "sample-inputs" / "sample_phishing_email.eml"
 
-        with patch.dict("os.environ", {"GOOGLE_SAFE_BROWSING_API_KEY": ""}, clear=False):
+        with patch.dict("os.environ", {"GOOGLE_SAFE_BROWSING_API_KEY": "", "URLHAUS_AUTH_KEY": ""}, clear=False):
             analysis = analyze_uploaded_email_bytes(sample_path.name, sample_path.read_bytes(), online_enrichment_enabled=True)
 
         self.assertTrue(analysis.online_enrichment.enabled)
@@ -184,8 +184,16 @@ class DashboardHelperTests(unittest.TestCase):
         self.assertEqual(analysis.online_enrichment.provider_results[0].provider, "Google Safe Browsing")
         self.assertEqual(analysis.online_enrichment.provider_results[0].status, "Not configured")
         self.assertEqual(analysis.online_enrichment.provider_results[0].note, "Missing API key")
-        self.assertTrue(all(item.status == "Not enabled" for item in analysis.online_enrichment.provider_results[1:]))
-        self.assertTrue(all(item.note != "Missing API key" for item in analysis.online_enrichment.provider_results[1:]))
+        self.assertEqual(analysis.online_enrichment.provider_results[3].provider, "URLhaus")
+        self.assertEqual(analysis.online_enrichment.provider_results[3].status, "Not configured")
+        self.assertEqual(analysis.online_enrichment.provider_results[3].note, "Missing API key")
+        inactive = [
+            analysis.online_enrichment.provider_results[1],
+            analysis.online_enrichment.provider_results[2],
+            analysis.online_enrichment.provider_results[4],
+        ]
+        self.assertTrue(all(item.status == "Not enabled" for item in inactive))
+        self.assertTrue(all(item.note != "Missing API key" for item in inactive))
 
     def test_online_enrichment_snapshot_verdicts(self):
         offline = EnrichmentResult()

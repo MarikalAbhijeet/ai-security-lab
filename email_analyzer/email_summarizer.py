@@ -192,17 +192,17 @@ def online_enrichment_context_lines(enrichment: EnrichmentResult) -> list[str]:
         f"- Providers checked: {enrichment.providers_checked}",
     ]
     for result in enrichment.provider_results:
-        if result.provider != "Google Safe Browsing":
+        if result.provider not in {"Google Safe Browsing", "URLhaus"}:
             continue
         lines.append(
-            "- Google Safe Browsing: "
+            f"- {result.provider}: "
             f"status={result.status}; verdict={result.threat_result}; "
             f"score={result.score}; indicator={result.indicator}; note={result.note}"
         )
         if result.details:
-            lines.append(f"- Google Safe Browsing details: {result.details}")
+            lines.append(f"- {result.provider} details: {result.details}")
         if result.error:
-            lines.append(f"- Google Safe Browsing error: {result.error}")
+            lines.append(f"- {result.provider} error: {result.error}")
     lines.append("- Raw email body, raw headers, attachments, and files were not sent to online providers.")
     return lines
 

@@ -65,11 +65,12 @@ class EmailSummarizerTests(unittest.TestCase):
 
     def test_copilot_context_includes_safe_online_enrichment_summary_only(self):
         sample = PROJECT_ROOT / "sample-inputs" / "sample_phishing_email.eml"
-        with patch.dict("os.environ", {"GOOGLE_SAFE_BROWSING_API_KEY": ""}, clear=False):
+        with patch.dict("os.environ", {"GOOGLE_SAFE_BROWSING_API_KEY": "", "URLHAUS_AUTH_KEY": ""}, clear=False):
             analysis = analyze_email_file(sample.name, sample.read_bytes(), online_enrichment_enabled=True)
 
         self.assertIn("Online enrichment summary:", analysis.copilot_context)
         self.assertIn("Google Safe Browsing", analysis.copilot_context)
+        self.assertIn("URLhaus", analysis.copilot_context)
         self.assertIn("Raw email body, raw headers, attachments, and files were not sent", analysis.copilot_context)
         self.assertNotIn("Open the secure SharePoint document and sign in here", analysis.copilot_context)
 

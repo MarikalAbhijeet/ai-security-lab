@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime
+import ssl
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import certifi
+
 
 GOOGLE_SAFE_BROWSING_ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
+URLHAUS_ENDPOINT = "https://urlhaus-api.abuse.ch/v1/url/"
 DEFAULT_TIMEOUT_SECONDS = 5
 
 
@@ -65,7 +70,7 @@ PROVIDERS = {
     "Google Safe Browsing": "GOOGLE_SAFE_BROWSING_API_KEY",
     "VirusTotal": "VIRUSTOTAL_API_KEY",
     "AbuseIPDB": "ABUSEIPDB_API_KEY",
-    "URLhaus": "URLHAUS_API_KEY",
+    "URLhaus": "URLHAUS_AUTH_KEY",
     "urlscan.io": "URLSCAN_API_KEY",
 }
 
@@ -76,6 +81,7 @@ def enrich_indicators(
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     mock_results: list[ProviderResult] | None = None,
     http_post=None,
+    urlhaus_post=None,
 ) -> EnrichmentResult:
     """Return disabled-by-default enrichment status for extracted indicators only."""
     env = env or os.environ
@@ -87,7 +93,13 @@ def enrich_indicators(
     if mock_results is not None:
         return build_result("Mocked online enrichment results", True, mock_results, normalized_indicators)
 
-    provider_results = configured_provider_results(normalized_indicators, env, timeout_seconds, http_post=http_post)
+    provider_results = configured_provider_results(
+        normalized_indicators,
+        env,
+        timeout_seconds,
+        http_post=http_post,
+        urlhaus_post=urlhaus_post,
+    )
     if not any(result.status == "Checked" for result in provider_results) and any(
         result.provider == "Google Safe Browsing" and result.status == "Not configured"
         for result in provider_results
@@ -101,8 +113,9 @@ def configured_provider_results(
     env: dict[str, str],
     timeout_seconds: int,
     http_post=None,
+    urlhaus_post=None,
 ) -> list[ProviderResult]:
-    """Return Google Safe Browsing results plus non-implemented provider statuses."""
+    """Return implemented provider results plus non-implemented provider statuses."""
     results = []
     google_key = env.get("GOOGLE_SAFE_BROWSING_API_KEY", "").strip()
     if google_key:
@@ -110,7 +123,7 @@ def configured_provider_results(
     else:
         results.append(missing_key_result("Google Safe Browsing"))
 
-    for provider in ("VirusTotal", "AbuseIPDB", "URLhaus", "urlscan.io"):
+    for provider in ("VirusTotal", "AbuseIPDB"):
         results.append(
             ProviderResult(
                 provider=provider,
@@ -121,6 +134,23 @@ def configured_provider_results(
                 details="Provider adapter not enabled in this step.",
             )
         )
+
+    urlhaus_key = env.get("URLHAUS_AUTH_KEY", "").strip()
+    if urlhaus_key:
+        results.append(check_urlhaus(indicators, urlhaus_key, timeout_seconds, urlhaus_post=urlhaus_post))
+    else:
+        results.append(missing_key_result("URLhaus"))
+
+    results.append(
+        ProviderResult(
+            provider="urlscan.io",
+            status="Not enabled",
+            threat_result="Not checked",
+            score="Not checked",
+            note="Provider adapter not enabled in this step.",
+            details="Provider adapter not enabled in this step.",
+        )
+    )
     return results
 
 
@@ -196,6 +226,99 @@ def check_google_safe_browsing(
     )
 
 
+def check_urlhaus(
+    indicators: list[dict],
+    auth_key: str,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    urlhaus_post=None,
+) -> ProviderResult:
+    """Check extracted URLs with URLhaus by abuse.ch / Spamhaus."""
+    url_indicators = [item for item in indicators if item.get("type") == "URL" and item.get("value")]
+    checked_at = datetime.now(UTC).isoformat(timespec="seconds")
+    if not url_indicators:
+        return ProviderResult(
+            provider="URLhaus",
+            status="Checked",
+            threat_result="Not found",
+            score="0 URLs",
+            note="No extracted URLs were available for URLhaus.",
+            indicator="-",
+            indicator_type="URL",
+            checked_at=checked_at,
+        )
+
+    findings = []
+    checked_count = 0
+    try:
+        for item in unique_url_indicators(url_indicators):
+            checked_count += 1
+            status_code, response_text = (urlhaus_post or post_form)(
+                URLHAUS_ENDPOINT,
+                {"url": refang(item["value"])},
+                {"Auth-Key": auth_key},
+                timeout_seconds,
+            )
+            if status_code == 429:
+                return urlhaus_error_result("Rate limited", "Rate limit warning", "HTTP 429 rate limited", checked_at)
+            if status_code >= 400:
+                return urlhaus_error_result("Error", "Provider error", f"HTTP {status_code}", checked_at)
+            data = json.loads(response_text or "{}")
+            if urlhaus_response_is_match(data):
+                findings.append((item, data))
+    except TimeoutError as error:
+        return urlhaus_error_result("Error", "Provider timeout", str(error), checked_at)
+    except ssl.SSLCertVerificationError:
+        return urlhaus_error_result(
+            "Error",
+            "SSL certificate verification failed. Check local Python CA bundle.",
+            "SSL certificate verification failed. Check local Python CA bundle.",
+            checked_at,
+        )
+    except HTTPError as error:
+        if error.code == 429:
+            return urlhaus_error_result("Rate limited", "Rate limit warning", "HTTP 429 rate limited", checked_at)
+        return urlhaus_error_result("Error", "Provider error", f"HTTP {error.code}", checked_at)
+    except URLError as error:
+        if is_ssl_verification_error(error):
+            return urlhaus_error_result(
+                "Error",
+                "SSL certificate verification failed. Check local Python CA bundle.",
+                "SSL certificate verification failed. Check local Python CA bundle.",
+                checked_at,
+            )
+        return urlhaus_error_result("Error", "Provider error", str(error), checked_at)
+    except json.JSONDecodeError as error:
+        return urlhaus_error_result("Error", "Provider error", f"Invalid JSON response: {error}", checked_at)
+    except (OSError, ValueError) as error:
+        return urlhaus_error_result("Error", "Provider error", str(error), checked_at)
+
+    if findings:
+        first_item, first_match = findings[0]
+        return ProviderResult(
+            provider="URLhaus",
+            status="Checked",
+            threat_result="Threat found",
+            score="Match found",
+            note=urlhaus_details(first_match),
+            indicator=display_indicator(first_item["value"]),
+            indicator_type="URL",
+            details=urlhaus_details(first_match),
+            checked_at=checked_at,
+        )
+
+    return ProviderResult(
+        provider="URLhaus",
+        status="Checked",
+        threat_result="Clean",
+        score="0 detections",
+        note="No match found.",
+        indicator=f"{checked_count} URL(s)",
+        indicator_type="URL",
+        details="No match found.",
+        checked_at=checked_at,
+    )
+
+
 def google_safe_browsing_payload(url_indicators: list[dict]) -> dict:
     """Build a Safe Browsing request from original URLs only."""
     return {
@@ -227,6 +350,35 @@ def post_json(url: str, payload: dict, timeout_seconds: int) -> tuple[int, str]:
         return int(getattr(response, "status", 200)), body
 
 
+def post_form(url: str, form_data: dict, headers: dict, timeout_seconds: int) -> tuple[int, str]:
+    """Post form data with a strict timeout."""
+    request_headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    request_headers.update(headers)
+    request = Request(
+        url,
+        data=urlencode(form_data).encode("utf-8"),
+        headers=request_headers,
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout_seconds, context=verified_ssl_context()) as response:
+        body = response.read().decode("utf-8")
+        return int(getattr(response, "status", 200)), body
+
+
+def verified_ssl_context() -> ssl.SSLContext:
+    """Return a certifi-backed SSL context with certificate validation enabled."""
+    context = ssl.create_default_context(cafile=certifi.where())
+    context.check_hostname = True
+    context.verify_mode = ssl.CERT_REQUIRED
+    return context
+
+
+def is_ssl_verification_error(error: URLError) -> bool:
+    """Return True for wrapped SSL certificate verification errors."""
+    reason = getattr(error, "reason", None)
+    return isinstance(reason, ssl.SSLCertVerificationError) or "CERTIFICATE_VERIFY_FAILED" in str(error)
+
+
 def google_error_result(status: str, note: str, error: str, checked_at: str) -> ProviderResult:
     """Return normalized Google Safe Browsing error state."""
     return ProviderResult(
@@ -237,6 +389,22 @@ def google_error_result(status: str, note: str, error: str, checked_at: str) -> 
         note=note,
         indicator="-",
         indicator_type="URL",
+        error=error,
+        checked_at=checked_at,
+    )
+
+
+def urlhaus_error_result(status: str, details: str, error: str, checked_at: str) -> ProviderResult:
+    """Return normalized URLhaus error state."""
+    return ProviderResult(
+        provider="URLhaus",
+        status=status,
+        threat_result="Unknown",
+        score="Not checked",
+        note=details,
+        indicator="-",
+        indicator_type="URL",
+        details=details,
         error=error,
         checked_at=checked_at,
     )
@@ -278,7 +446,7 @@ def build_result(status: str, enabled: bool, provider_results: list[ProviderResu
     """Build enrichment result summary metrics."""
     threats = [result for result in provider_results if result.threat_result == "Threat found"]
     checked = [result for result in provider_results if result.status == "Checked"]
-    checked_urls = checked_url_count(provider_results) or (count_type(indicators, "URL") if checked else 0)
+    checked_urls = unique_url_count(indicators) if checked else 0
     return EnrichmentResult(
         status=status,
         enabled=enabled,
@@ -316,6 +484,52 @@ def checked_url_count(provider_results: list[ProviderResult]) -> int:
         if result.provider == "Google Safe Browsing" and result.status == "Checked":
             return int(result.raw_details.get("urls_checked", 0))
     return 0
+
+
+def unique_url_count(indicators: list[dict]) -> int:
+    """Count unique extracted URLs."""
+    return len({refang(item.get("value", "")) for item in indicators if item.get("type") == "URL" and item.get("value")})
+
+
+def unique_url_indicators(url_indicators: list[dict]) -> list[dict]:
+    """Return unique URL indicators while preserving order."""
+    seen = set()
+    unique = []
+    for item in url_indicators:
+        url = refang(item.get("value", ""))
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        unique.append(item)
+    return unique
+
+
+def urlhaus_response_is_match(data: dict) -> bool:
+    """Return True when URLhaus response indicates a known malicious URL."""
+    query_status = str(data.get("query_status", "")).lower()
+    url_status = str(data.get("url_status", "")).lower()
+    if query_status in {"ok", "known"}:
+        return True
+    return url_status in {"online", "offline", "unknown"}
+
+
+def urlhaus_details(data: dict) -> str:
+    """Build a bounded URLhaus result details string."""
+    parts = []
+    for key, label in (
+        ("threat", "Threat"),
+        ("malware_family", "Malware family"),
+        ("url_status", "URL status"),
+    ):
+        value = data.get(key)
+        if value:
+            parts.append(f"{label}: {value}")
+    tags = data.get("tags")
+    if isinstance(tags, list) and tags:
+        parts.append("Tags: " + ", ".join(str(tag) for tag in tags[:5]))
+    if not parts and data.get("query_status"):
+        parts.append(f"Query status: {data['query_status']}")
+    return "; ".join(parts) if parts else "Match found."
 
 
 def count_type(indicators: list[dict], indicator_type: str) -> int:

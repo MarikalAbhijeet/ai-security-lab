@@ -487,17 +487,22 @@ def render_email_focused_answer(session_context: str, question: str, detected_in
         )
     if detected_intent == "ioc_listing":
         return render_ioc_answer(iocs, session_context)
-    if "google safe browsing" in question_lower or "provider" in question_lower or "online enrichment" in question_lower:
+    if (
+        "google safe browsing" in question_lower
+        or "urlhaus" in question_lower
+        or "provider" in question_lower
+        or "online enrichment" in question_lower
+    ):
         return "\n\n".join(
             [
                 "## Local Email Analysis",
                 f"- Verdict: {verdict}",
                 f"- Risk Score: {risk_score}/100",
                 "\n".join(reasons[:4]) if reasons else "- No strong local phishing indicators were found.",
-                "## Google Safe Browsing Enrichment",
+                "## Online Provider Enrichment",
                 "\n".join(enrichment_lines) if enrichment_lines else "- No Google Safe Browsing enrichment summary is active.",
                 "## Safety Boundary",
-                "- Only extracted URL indicators are eligible for Google Safe Browsing checks.",
+                "- Only extracted URL indicators are eligible for Google Safe Browsing and URLhaus checks.",
                 "- Raw email body, raw headers, attachments, and uploaded files are not sent to online providers.",
             ]
         )
@@ -513,7 +518,7 @@ def render_email_focused_answer(session_context: str, question: str, detected_in
             "\n".join(reasons[:6]) if reasons else "- The local email analyzer did not find enough high-confidence indicators.",
             "## Email IOCs / Investigation Artifacts",
             "\n".join(iocs[:15]) if iocs else "- No email IOCs were extracted.",
-            "## Google Safe Browsing Enrichment",
+            "## Online Provider Enrichment",
             "\n".join(enrichment_lines) if enrichment_lines else "- Online enrichment was not enabled or no provider summary is active.",
             "## SOC Details",
             "\n".join(format_bullets_with_label(soc_actions[:6], "Recommended Action")) if soc_actions else "- **Recommended Action:** Review sender, authentication, URLs, attachments, and mailbox scope.",
