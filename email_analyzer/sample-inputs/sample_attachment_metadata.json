@@ -1,0 +1,19 @@
+{
+  "attachments": [
+    {
+      "name": "secure-message.html",
+      "content_type": "text/html",
+      "extension": ".html",
+      "size": 2048,
+      "notes": "Fake sample HTML attachment for credential-harvesting simulation."
+    },
+    {
+      "name": "invoice_january.pdf.zip",
+      "content_type": "application/zip",
+      "extension": ".zip",
+      "size": 4096,
+      "notes": "Fake sample password-protected archive metadata. No real file is included."
+    }
+  ]
+}
+

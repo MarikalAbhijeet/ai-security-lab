@@ -72,6 +72,8 @@ python .\copilot_assistant.py --question "What are the limitations of this lab?"
 5. Ollama generates an answer locally, or mock mode returns a deterministic test response.
 6. The final Markdown answer includes citations, confidence notes, limitations, and safe-use warnings.
 
+When AI Email Threat Analyzer context is active in the dashboard, the Copilot receives only the summarized verdict, risk score, category scores, defanged IOCs, and recommended actions. Raw `.eml` content, full headers, full body text, and attachment content are not sent to Ollama.
+
 ## Local Knowledge Sources
 
 The retriever indexes safe local Markdown, TXT, KQL, PowerShell, JSON, and CSV files. It excludes hidden folders, `.env` files, virtual environments, cache folders, sensitive-looking filenames, and binary files.

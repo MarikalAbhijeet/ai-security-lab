@@ -75,26 +75,12 @@ def answer_question(
             )
     source_citations = []
     if safe_session_context and evidence_focused:
-        source_citations.insert(
-            0,
-            {
-                "path": "Uploaded evidence summary from current session",
-                "heading": "Threat Evidence Workbench",
-                "score": 1.0,
-            },
-        )
+        source_citations.insert(0, session_context_citation(safe_session_context))
         source_citations.extend(citations(chunks))
     else:
         source_citations = citations(chunks)
         if safe_session_context:
-            source_citations.insert(
-                0,
-                {
-                    "path": "Uploaded evidence summary from current session",
-                    "heading": "Threat Evidence Workbench",
-                    "score": 1.0,
-                },
-            )
+            source_citations.insert(0, session_context_citation(safe_session_context))
     retrieval_confidence = (
         "Evidence-focused answer: cited current-session evidence summary first, then matching local SOC sources."
         if evidence_focused
@@ -196,6 +182,21 @@ def build_result(**kwargs) -> dict:
         "generation_error": kwargs.get("generation_error", ""),
         "retrieval_confidence": kwargs["retrieval_confidence"],
         "detected_intent": kwargs.get("detected_intent", "general_question"),
+    }
+
+
+def session_context_citation(session_context: str) -> dict:
+    """Return the correct source label for temporary dashboard context."""
+    if "Uploaded email analysis summary" in session_context:
+        return {
+            "path": "Email Threat Analyzer summary from current session",
+            "heading": "AI Email Threat Analyzer",
+            "score": 1.0,
+        }
+    return {
+        "path": "Uploaded evidence summary from current session",
+        "heading": "Threat Evidence Workbench",
+        "score": 1.0,
     }
 
 
@@ -403,6 +404,9 @@ def append_session_ioc_section(answer: str, session_context: str) -> str:
 
 def build_evidence_focused_answer(session_context: str, _model_answer: str, question: str, detected_intent: str) -> str:
     """Build a deterministic SOC answer from safe uploaded evidence context."""
+    if "Uploaded email analysis summary" in session_context:
+        return render_email_focused_answer(session_context, question, detected_intent)
+
     ioc_lines = extract_session_ioc_lines(session_context)
     behavior_lines = extract_session_behavior_lines(session_context)
     metadata = extract_session_metadata(session_context)
@@ -450,6 +454,61 @@ def build_evidence_focused_answer(session_context: str, _model_answer: str, ques
         "This response is based on a local, summarized evidence context from Threat Evidence Workbench. Validate all findings with a human analyst before operational action.",
     ]
     return "\n\n".join(sections)
+
+
+def render_email_focused_answer(session_context: str, question: str, detected_intent: str) -> str:
+    """Render a user-friendly email-aware Copilot answer from summarized context."""
+    metadata = extract_session_metadata(session_context)
+    reasons = extract_named_section_lines(session_context, "Main reasons:")
+    iocs = extract_named_section_lines(session_context, "IOCs / Investigation Artifacts Observed:")
+    user_guidance = extract_named_section_lines(session_context, "Recommended user guidance:")
+    soc_actions = extract_named_section_lines(session_context, "Recommended SOC actions:")
+    kql_topics = extract_named_section_lines(session_context, "Recommended KQL topics:")
+    verdict = metadata.get("verdict", "Needs Review")
+    risk_score = metadata.get("risk score", "Unknown")
+
+    if detected_intent == "kql_recommendation":
+        return render_kql_answer(session_context, kql_topics, iocs, question)
+    if detected_intent == "ticket_generation":
+        return "\n\n".join(
+            [
+                "## Freshservice-Style Ticket Note",
+                "**Subject:** Reported suspicious email requires phishing/spam triage",
+                f"**Verdict:** {verdict}",
+                f"**Risk Score:** {risk_score}/100",
+                f"**Summary:** {'; '.join(reason.removeprefix('- ') for reason in reasons[:4]) or 'Local email analysis requires review.'}",
+                f"**User Guidance:** {' '.join(line.removeprefix('- ') for line in user_guidance[:2])}",
+                f"**SOC Action:** {' '.join(action.removeprefix('- ') for action in soc_actions[:3])}",
+                "**Safety:** Raw email content was not sent to Ollama; this ticket is based on summarized local findings and defanged IOCs.",
+            ]
+        )
+    if detected_intent == "ioc_listing":
+        return render_ioc_answer(iocs, session_context)
+
+    return "\n\n".join(
+        [
+            "## User-Friendly Answer",
+            f"**Verdict:** {verdict}",
+            f"**Risk Score:** {risk_score}/100",
+            f"**What to tell the user:** {first_guidance(user_guidance, 'Report the email to IT/SOC and do not interact with it until reviewed.')}",
+            "**What the user should not do:** Do not click links, scan QR codes, open attachments, reply, or enter credentials.",
+            "## Why This Email Looks Suspicious",
+            "\n".join(reasons[:6]) if reasons else "- The local email analyzer did not find enough high-confidence indicators.",
+            "## Email IOCs / Investigation Artifacts",
+            "\n".join(iocs[:15]) if iocs else "- No email IOCs were extracted.",
+            "## SOC Details",
+            "\n".join(format_bullets_with_label(soc_actions[:6], "Recommended Action")) if soc_actions else "- **Recommended Action:** Review sender, authentication, URLs, attachments, and mailbox scope.",
+            "## Human Review Warning",
+            "This is a local lab result from summarized email analysis only. Validate before taking operational action.",
+        ]
+    )
+
+
+def first_guidance(lines: list[str], fallback: str) -> str:
+    """Return first guidance line without the bullet prefix."""
+    if not lines:
+        return fallback
+    return lines[0].removeprefix("- ").strip()
 
 
 def render_entity_risk_answer(priority: str, risk_lines: list[str], evidence_lines: list[str], ioc_lines: list[str], actions: list[str], mitre_lines: list[str], question: str) -> str:
@@ -963,8 +1022,14 @@ def generate_evidence_kql(evidence_type: str, session_context: str, question: st
         return "\n".join(
             [
                 "// Sample Microsoft 365 Defender KQL for uploaded phishing evidence. Demo only.",
+                "let SenderAddress = \"alerts@security-update.example.invalid\";",
+                "let SenderDomain = \"security-update.example.invalid\";",
+                "let SubjectKeyword = \"password expires\";",
+                "",
                 "EmailEvents",
-                "| where RecipientEmailAddress =~ \"user@example.com\" or SenderFromDomain =~ \"example.invalid\"",
+                "| where SenderFromAddress =~ SenderAddress",
+                "   or SenderFromDomain =~ SenderDomain",
+                "   or Subject has SubjectKeyword",
                 "| join kind=leftouter EmailUrlInfo on NetworkMessageId",
                 "| join kind=leftouter EmailAttachmentInfo on NetworkMessageId",
                 "| project Timestamp, SenderFromAddress, SenderFromDomain, RecipientEmailAddress, Subject, DeliveryAction, ThreatTypes, Url, FileName, SHA256",

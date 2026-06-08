@@ -1,0 +1,16 @@
+From: "Example Deals" <offers@newsletter.example.invalid>
+To: Avery User <avery.user@example.test>
+Subject: Weekly software deals and training discounts
+Date: Tue, 16 Jan 2026 10:30:00 +0000
+Message-ID: <sample-spam-001@example.invalid>
+Authentication-Results: mx.example.test; spf=pass smtp.mailfrom=newsletter.example.invalid; dkim=pass header.d=example.invalid; dmarc=pass header.from=newsletter.example.invalid
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hello,
+
+This is a fake sample marketing message about software training discounts.
+Visit https://newsletter.example.invalid/deals to review this week's offers.
+
+No credential reset or payment request is included.
+

@@ -19,12 +19,20 @@ from helpers import (  # noqa: E402
     validate_sample_file,
 )
 from app import (  # noqa: E402
+    analyze_uploaded_email_bytes,
+    build_email_session_context,
     extract_fenced_kql,
     get_analysis_findings,
     get_analysis_ioc_counts,
     get_analysis_risk_scores,
+    get_email_category_scores,
+    get_email_ioc_rows,
     get_highest_priority_finding,
+    online_enrichment_verdict,
+    provider_result_rows,
+    should_show_full_enrichment_snapshot,
 )
+from online_enrichment import EnrichmentResult, ProviderResult  # noqa: E402
 
 
 class DashboardHelperTests(unittest.TestCase):
@@ -138,6 +146,72 @@ class DashboardHelperTests(unittest.TestCase):
 
     def test_extract_fenced_kql_handles_missing_block(self):
         self.assertEqual(extract_fenced_kql("No query here."), "")
+
+    def test_dashboard_email_upload_path_analyzes_sample_phishing_email(self):
+        sample_path = DASHBOARD_ROOT.parent / "email_analyzer" / "sample-inputs" / "sample_phishing_email.eml"
+
+        analysis = analyze_uploaded_email_bytes(sample_path.name, sample_path.read_bytes())
+
+        self.assertEqual(analysis.score.verdict, "Likely Phishing")
+        self.assertGreaterEqual(analysis.score.overall_score, 70)
+        self.assertGreater(len(get_email_ioc_rows(analysis)), 0)
+        self.assertGreater(get_email_category_scores(analysis)["URL/domain risk"], 0)
+        self.assertFalse(analysis.online_enrichment.enabled)
+        self.assertTrue(all(item.status == "Offline only" for item in analysis.online_enrichment.provider_results))
+
+    def test_dashboard_email_context_is_safe_summary_not_raw_email(self):
+        sample_path = DASHBOARD_ROOT.parent / "email_analyzer" / "sample-inputs" / "sample_phishing_email.eml"
+        raw_text = sample_path.read_text(encoding="utf-8")
+        analysis = analyze_uploaded_email_bytes(sample_path.name, sample_path.read_bytes())
+
+        context = build_email_session_context(analysis)
+
+        self.assertIn("Uploaded email analysis summary", context)
+        self.assertIn("IOCs / Investigation Artifacts Observed", context)
+        self.assertIn("Raw email content was not included", context)
+        self.assertNotEqual(raw_text, context)
+        self.assertNotIn("Open the secure SharePoint document and sign in here", context)
+
+    def test_dashboard_email_enrichment_enabled_without_keys_is_not_configured(self):
+        sample_path = DASHBOARD_ROOT.parent / "email_analyzer" / "sample-inputs" / "sample_phishing_email.eml"
+
+        analysis = analyze_uploaded_email_bytes(sample_path.name, sample_path.read_bytes(), online_enrichment_enabled=True)
+
+        self.assertTrue(analysis.online_enrichment.enabled)
+        self.assertEqual(analysis.online_enrichment.status, "Online enrichment not configured")
+        self.assertTrue(all(item.status == "Not configured" for item in analysis.online_enrichment.provider_results))
+        self.assertTrue(all(item.note == "No API key configured" for item in analysis.online_enrichment.provider_results))
+
+    def test_online_enrichment_snapshot_verdicts(self):
+        offline = EnrichmentResult()
+        flagged = EnrichmentResult(
+            provider_results=[ProviderResult("VirusTotal", status="Checked", threat_result="Threat found")],
+            enabled=True,
+            total_threats_found=1,
+            providers_checked=1,
+        )
+        clean = EnrichmentResult(
+            provider_results=[ProviderResult("VirusTotal", status="Checked", threat_result="Clean")],
+            enabled=True,
+            total_threats_found=0,
+            providers_checked=1,
+        )
+
+        self.assertEqual(online_enrichment_verdict(offline), "Offline analysis only")
+        self.assertEqual(online_enrichment_verdict(flagged), "One or more providers flagged indicators")
+        self.assertEqual(online_enrichment_verdict(clean), "No online provider flagged the indicators")
+
+    def test_online_enrichment_snapshot_visibility(self):
+        offline = EnrichmentResult(provider_results=[ProviderResult("VirusTotal")])
+        enabled = EnrichmentResult(
+            enabled=True,
+            provider_results=[ProviderResult("VirusTotal", status="Not configured", note="No API key configured")],
+        )
+
+        self.assertFalse(should_show_full_enrichment_snapshot(offline))
+        self.assertTrue(should_show_full_enrichment_snapshot(enabled))
+        self.assertEqual(provider_result_rows(enabled)[0]["Provider"], "VirusTotal")
+        self.assertEqual(provider_result_rows(enabled)[0]["Notes"], "No API key configured")
 
 
 if __name__ == "__main__":

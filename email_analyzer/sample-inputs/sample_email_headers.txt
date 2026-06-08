@@ -1,0 +1,10 @@
+From: "DocuSign Secure Review" <review@docusign-alerts.example.invalid>
+Reply-To: approvals@external-review.example.invalid
+Return-Path: <bounce@external-review.example.invalid>
+To: Avery User <avery.user@example.test>
+Subject: Signature required today
+Date: Tue, 16 Jan 2026 12:00:00 +0000
+Message-ID: <sample-headers-001@example.invalid>
+Authentication-Results: mx.example.test; spf=softfail smtp.mailfrom=docusign-alerts.example.invalid; dkim=missing; dmarc=fail header.from=docusign-alerts.example.invalid
+Received: from unknown.localhost (unknown [198.51.100.42]) by mx.example.test with ESMTP id fake456
+

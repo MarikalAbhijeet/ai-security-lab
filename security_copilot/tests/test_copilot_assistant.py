@@ -8,9 +8,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "email_analyzer"))
 
 from config import CopilotConfig, load_config  # noqa: E402
 from copilot_assistant import answer_question, render_markdown, resolve_output_path, validate_answer_mode  # noqa: E402
+from email_summarizer import analyze_email_file  # noqa: E402
 
 
 class CopilotAssistantTests(unittest.TestCase):
@@ -246,6 +248,53 @@ class CopilotAssistantTests(unittest.TestCase):
         self.assertIn("**Summary:**", result["answer"])
         self.assertIn("Recommended Action", result["answer"])
         self.assertIn("Escalation", result["answer"])
+
+    def test_email_context_returns_user_friendly_answer_without_raw_body(self):
+        config = CopilotConfig(provider="mock", test_mode=True)
+        sample = REPO_ROOT / "email_analyzer" / "sample-inputs" / "sample_phishing_email.eml"
+        analysis = analyze_email_file(sample.name, sample.read_bytes())
+
+        result = answer_question(
+            "Is this email phishing, and what should I tell the user?",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=analysis.copilot_context,
+        )
+
+        self.assertIn("## User-Friendly Answer", result["answer"])
+        self.assertIn("**Verdict:** Likely Phishing", result["answer"])
+        self.assertIn("What to tell the user", result["answer"])
+        self.assertIn("Email IOCs", result["answer"])
+        self.assertEqual(result["sources"][0]["path"], "Email Threat Analyzer summary from current session")
+        self.assertEqual(result["sources"][0]["heading"], "AI Email Threat Analyzer")
+        self.assertNotIn("Open the secure SharePoint document and sign in here", result["answer"])
+
+    def test_email_context_kql_and_ticket_intents_work(self):
+        config = CopilotConfig(provider="mock", test_mode=True)
+        sample = REPO_ROOT / "email_analyzer" / "sample-inputs" / "sample_phishing_email.eml"
+        analysis = analyze_email_file(sample.name, sample.read_bytes())
+
+        kql_result = answer_question(
+            "What KQL should I run to investigate this email?",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=analysis.copilot_context,
+        )
+        ticket_result = answer_question(
+            "Create a Freshservice-style ticket note for this email.",
+            config=config,
+            index_root=REPO_ROOT,
+            session_context=analysis.copilot_context,
+        )
+
+        self.assertEqual(kql_result["detected_intent"], "kql_recommendation")
+        self.assertIn("```kql", kql_result["answer"])
+        self.assertIn("EmailEvents", kql_result["answer"])
+        self.assertIn("SenderAddress", kql_result["answer"])
+        self.assertIn("SenderDomain", kql_result["answer"])
+        self.assertEqual(ticket_result["detected_intent"], "ticket_generation")
+        self.assertIn("Freshservice-Style Ticket Note", ticket_result["answer"])
+        self.assertIn("Raw email content was not sent", ticket_result["answer"])
 
     def test_guardrails_block_secret_like_questions_before_llm(self):
         config = CopilotConfig(provider="mock", test_mode=True)

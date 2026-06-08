@@ -1,6 +1,6 @@
 # AI Security Command Center
 
-AI Security Command Center is a Streamlit dashboard for running the local AI Security Lab analyzers, ML anomaly detection module, Threat Evidence Workbench, and Local SecOps Copilot from one browser interface.
+AI Security Command Center is a Streamlit dashboard for running the local AI Security Lab analyzers, ML anomaly detection module, Threat Evidence Workbench, AI Email Threat Analyzer, and Local SecOps Copilot from one browser interface.
 
 The dashboard can use fake/sample JSON files already stored in this repository or a custom JSON file uploaded from your computer. It does not call Microsoft services, paid APIs, cloud AI services, vendor portals, or live security systems. Local SecOps Copilot can call only local Ollama when enabled.
 
@@ -12,6 +12,7 @@ The dashboard can use fake/sample JSON files already stored in this repository o
 - AI Vendor Risk Toolkit
 - ML Anomaly Detection
 - Threat Evidence Workbench
+- AI Email Threat Analyzer
 - Local SecOps Copilot
 - SOC Playbook Library
 - Microsoft Security Automation Library
@@ -58,6 +59,7 @@ Then open the local URL shown by Streamlit.
 
 - `Security Analysis Modules`: run the local project analyzers and view Markdown reports.
 - `Threat Evidence Workbench`: upload fake/sample JSON, CSV, TXT, or LOG evidence for local threat analysis.
+- `Email Threat Analyzer`: upload or paste fake/sample email evidence for local phishing/spam triage.
 - `Local SecOps Copilot`: ask a question, choose an answer mode, retrieve local source files, and generate a source-cited answer through local Ollama or mock mode.
 
 The top dashboard summary shows status cards for local Ollama, the default model, evidence analysis, IOC extraction, and the playbook library.
@@ -98,6 +100,22 @@ The dashboard validates file type and size, parses the uploaded evidence in memo
 The Workbench displays evidence summary cards, IOC count metric cards, IOC charts, risk-score charts, the highest priority finding, risky entity tables, detected behavior tables, and a grouped IOC / investigation artifact table. All sample IOCs are fake/demo values.
 
 When you select `Ask Local SecOps Copilot about this evidence`, the Copilot receives only the summarized evidence and IOC context from the current session. The raw full uploaded file is not sent to the Copilot prompt and is not written to disk.
+
+## AI Email Threat Analyzer
+
+AI Email Threat Analyzer supports local-only phishing/spam triage for fake/sample email evidence:
+
+- `.eml` uploads
+- pasted raw headers
+- pasted email body text
+- pasted URLs/domains
+- pasted attachment metadata text or JSON
+
+The first output is intentionally user-friendly: verdict, risk score, what the user should do, what the user should not do, and main plain-English reasons. Technical details are shown in expandable sections for headers, URLs/domains, attachment metadata, SOC details, and raw Markdown.
+
+The analyzer does not open links, follow URLs, execute attachments, save uploaded emails permanently, or send raw email content to Local SecOps Copilot. When you select `Ask Local SecOps Copilot about this email`, only summarized findings, extracted/defanged IOCs, category scores, and recommended actions are passed to the Copilot.
+
+Online enrichment hooks are disabled by default and do not require API keys.
 
 ## Local SecOps Copilot
 

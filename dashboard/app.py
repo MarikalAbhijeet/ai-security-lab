@@ -33,6 +33,12 @@ if str(EVIDENCE_ANALYZER_DIR) not in sys.path:
 
 from evidence_summarizer import analyze_evidence  # noqa: E402
 
+EMAIL_ANALYZER_DIR = REPO_ROOT / "email_analyzer"
+if str(EMAIL_ANALYZER_DIR) not in sys.path:
+    sys.path.insert(0, str(EMAIL_ANALYZER_DIR))
+
+from email_summarizer import analyze_email_file, analyze_pasted_email  # noqa: E402
+
 
 EXAMPLE_PROMPTS = {
     "Investigate risky sign-in": "What should an analyst check when investigating a risky sign-in?",
@@ -54,8 +60,8 @@ def main() -> None:
     )
     render_command_center_status()
 
-    reports_tab, evidence_tab, copilot_tab = st.tabs(
-        ["Security Analysis Modules", "Threat Evidence Workbench", "Local SecOps Copilot"]
+    reports_tab, evidence_tab, email_tab, copilot_tab = st.tabs(
+        ["Security Analysis Modules", "Threat Evidence Workbench", "Email Threat Analyzer", "Local SecOps Copilot"]
     )
 
     with reports_tab:
@@ -63,6 +69,9 @@ def main() -> None:
 
     with evidence_tab:
         render_threat_evidence_workbench()
+
+    with email_tab:
+        render_email_threat_analyzer()
 
     with copilot_tab:
         render_copilot_chat()
@@ -384,6 +393,340 @@ def render_threat_evidence_workbench() -> None:
         st.success("Evidence summary is ready for Local SecOps Copilot. Open the Copilot tab to review the answer.")
 
 
+def render_email_threat_analyzer() -> None:
+    """Render local AI Email Threat Analyzer workflow."""
+    st.subheader("AI Email Threat Analyzer")
+    st.write("Upload or paste a suspicious email for local phishing/spam triage.")
+    st.warning(
+        "Do not upload real secrets, passwords, tokens, company data, client data, tenant data, "
+        "production logs, or vendor confidential data. Emails are processed locally in memory."
+    )
+    st.caption("Supported uploads: `.eml`, `.txt`, `.json` metadata. `.msg support planned`.")
+    online_enabled = st.checkbox(
+        "Enable online enrichment for extracted indicators",
+        value=False,
+        help="Only extracted indicators such as URLs, domains, IPs, and hashes are sent. Raw email body, raw headers, and attachments are not sent.",
+        key="email_online_enrichment_enabled",
+    )
+
+    input_mode = st.radio(
+        "Email evidence input",
+        options=["Upload .eml or metadata file", "Paste headers", "Paste email body", "Paste URLs/domains", "Paste attachment metadata"],
+        horizontal=False,
+    )
+
+    analysis = None
+    if input_mode == "Upload .eml or metadata file":
+        uploaded_file = st.file_uploader("Upload email evidence", type=["eml", "txt", "json"], key="email_evidence_upload")
+        if uploaded_file is not None:
+            upload_id = f"{uploaded_file.name}:{uploaded_file.size}"
+            if st.session_state.get("last_email_upload_id") != upload_id:
+                clear_email_state(clear_upload_id=False)
+                st.session_state["last_email_upload_id"] = upload_id
+            st.caption("The uploaded file is parsed in memory and is not saved permanently.")
+        if st.button("Analyze email", type="primary"):
+            if uploaded_file is None:
+                st.error("Upload an email evidence file before analyzing.")
+                return
+            try:
+                analysis = analyze_uploaded_email_bytes(uploaded_file.name, uploaded_file.getvalue(), online_enrichment_enabled=online_enabled)
+            except ValueError as error:
+                st.error(str(error))
+                return
+    else:
+        source_type = input_mode.lower().replace("paste ", "").replace(" ", "_")
+        pasted_text = st.text_area("Paste email evidence", height=220)
+        if st.button("Analyze pasted email", type="primary"):
+            if not pasted_text.strip():
+                st.error("Paste email evidence before analyzing.")
+                return
+            try:
+                analysis = analyze_pasted_email_text(pasted_text, source_type=source_type, online_enrichment_enabled=online_enabled)
+            except ValueError as error:
+                st.error(str(error))
+                return
+
+    if analysis is not None:
+        st.session_state["email_analysis"] = analysis
+        st.session_state["email_session_context"] = build_email_session_context(analysis)
+        st.session_state["copilot_session_context"] = build_email_session_context(analysis)
+
+    clear_left, clear_right = st.columns([1, 4])
+    with clear_left:
+        if st.button("Clear Email Analysis"):
+            clear_email_state()
+            st.success("Cleared email analysis and Copilot email context. Uploaded email content was not saved.")
+            st.rerun()
+
+    analysis = st.session_state.get("email_analysis")
+    if not analysis:
+        st.info("Upload or paste fake/sample email evidence to generate a local email threat report.")
+        return
+
+    render_email_summary_cards(analysis)
+    render_online_enrichment_snapshot(analysis)
+    render_email_detail_sections(analysis)
+
+    st.info("Local SecOps Copilot will receive only summarized email findings, extracted IOCs, and risk scores.")
+    if st.button("Ask Local SecOps Copilot about this email"):
+        st.session_state["copilot_session_context"] = build_email_session_context(analysis)
+        st.session_state["pending_copilot_question"] = "Is this email phishing, and what should I tell the user?"
+        st.success("Email summary is ready for Local SecOps Copilot. Open the Copilot tab to review the answer.")
+
+
+def render_email_summary_cards(analysis) -> None:
+    """Render user-friendly email verdict cards first."""
+    st.markdown("### Email Verdict")
+    columns = st.columns(4)
+    card_values = [
+        ("Verdict", analysis.score.verdict),
+        ("Risk Score", f"{analysis.score.overall_score}/100"),
+        ("User Action", analysis.user_action),
+        ("IT / SOC Action", analysis.agent_action),
+    ]
+    for column, (label, value) in zip(columns, card_values):
+        with column:
+            with st.container(border=True):
+                st.caption(label)
+                st.markdown(f"**{value}**")
+    st.markdown("### Why this email was flagged")
+    for reason in analysis.score.reasons[:5] or ["No strong phishing indicators were found."]:
+        st.markdown(f"- {reason}")
+    st.markdown(f"**Recommended user action:** {analysis.user_action}")
+    st.markdown(f"**Do not do this:** {analysis.user_do_not}")
+
+
+def render_online_enrichment_snapshot(analysis) -> None:
+    """Render top-level online enrichment cards for email analysis."""
+    enrichment = analysis.online_enrichment
+    st.markdown("### Online Enrichment Snapshot")
+    st.caption("Online enrichment supports local analysis but does not replace analyst review.")
+    if not should_show_full_enrichment_snapshot(enrichment):
+        with st.container(border=True):
+            st.markdown("**Online Enrichment: Off**")
+            st.write("Offline analysis only. No external lookups were performed.")
+            st.caption("Enable online enrichment to check extracted URLs, domains, IPs, and hashes with configured free providers.")
+        render_enrichment_metrics(enrichment)
+        with st.expander("Provider status", expanded=False):
+            for provider in enrichment.provider_results:
+                st.write(f"- **{provider.provider}:** Offline only / Not checked")
+        return
+
+    st.markdown(f"**{online_enrichment_verdict(enrichment)}**")
+    render_enrichment_metrics(enrichment)
+
+    provider_columns = st.columns(len(enrichment.provider_results))
+    for column, provider in zip(provider_columns, enrichment.provider_results):
+        with column:
+            with st.container(border=True):
+                st.markdown(f"**{provider.provider}**")
+                st.write(status_text(provider.status, provider.threat_result))
+                st.caption(f"Score: {provider.score}")
+                st.caption(provider.note)
+
+    provider_rows = provider_result_rows(enrichment)
+    st.dataframe(provider_rows, width="stretch", hide_index=True)
+
+    with st.expander("Online Enrichment Details", expanded=False):
+        render_online_enrichment_details(enrichment)
+
+
+def render_enrichment_metrics(enrichment) -> None:
+    """Render compact enrichment metrics."""
+    metric_columns = st.columns(6)
+    metric_values = [
+        ("URLs checked", enrichment.urls_checked),
+        ("Domains checked", enrichment.domains_checked),
+        ("IPs checked", enrichment.ips_checked),
+        ("Hashes checked", enrichment.hashes_checked),
+        ("Threats found", enrichment.total_threats_found),
+        ("Providers checked", enrichment.providers_checked),
+    ]
+    for column, (label, value) in zip(metric_columns, metric_values):
+        with column:
+            st.metric(label, value)
+
+
+def provider_result_rows(enrichment) -> list[dict]:
+    """Return provider rows for dashboard tables."""
+    return [
+        {
+            "Provider": item.provider,
+            "Indicator": item.indicator,
+            "Type": item.indicator_type,
+            "Result": item.threat_result,
+            "Score / Detection": item.score,
+            "Notes": item.note,
+        }
+        for item in enrichment.provider_results
+    ]
+
+
+def render_online_enrichment_details(enrichment) -> None:
+    """Render raw provider details in an expander."""
+    st.write(f"Status: `{enrichment.status}`")
+    st.write(f"Total indicators checked: `{enrichment.total_indicators_checked}`")
+    st.write(f"Highest provider score: `{enrichment.highest_provider_score}`")
+    st.json(
+        [
+            item.raw_details or {
+            "provider": item.provider,
+            "status": item.status,
+            "threat_result": item.threat_result,
+            "score": item.score,
+            "note": item.note,
+            }
+            for item in enrichment.provider_results
+        ]
+    )
+
+
+def should_show_full_enrichment_snapshot(enrichment) -> bool:
+    """Return True when provider cards/results should be shown by default."""
+    return bool(getattr(enrichment, "enabled", False))
+
+
+def online_enrichment_verdict(enrichment) -> str:
+    """Return simple online enrichment verdict text."""
+    if not getattr(enrichment, "enabled", False):
+        return "Offline analysis only"
+    if enrichment.total_threats_found > 0:
+        return "One or more providers flagged indicators"
+    if enrichment.providers_checked > 0:
+        return "No online provider flagged the indicators"
+    if all(getattr(result, "status", "") == "Not configured" for result in enrichment.provider_results):
+        return "Online enrichment not configured"
+    if any(getattr(result, "status", "") in {"Not configured", "Error", "Rate limited"} for result in enrichment.provider_results):
+        return "Online enrichment incomplete"
+    return "Online enrichment not enabled"
+
+
+def status_text(status: str, threat_result: str) -> str:
+    """Return readable provider status text."""
+    if threat_result == "Threat found":
+        return f":warning: {status} | {threat_result}"
+    if threat_result == "Clean":
+        return f":green[{status} | {threat_result}]"
+    return f"{status} | {threat_result}"
+
+
+def render_email_detail_sections(analysis) -> None:
+    """Render technical email analysis sections."""
+    st.markdown("### Risk Breakdown")
+    category_scores = get_email_category_scores(analysis)
+    st.bar_chart({"Risk Score": category_scores})
+
+    url_rows = [
+        {
+            "Indicator": finding.display_value,
+            "Type": finding.indicator_type,
+            "Severity": finding.severity,
+            "Reason": finding.reason,
+        }
+        for finding in analysis.url_findings
+    ]
+    attachment_rows = [
+        {
+            "Attachment": finding.name,
+            "Extension": finding.extension,
+            "Severity": finding.severity,
+            "Reason": finding.reason,
+        }
+        for finding in analysis.attachment_findings
+    ]
+    ioc_rows = get_email_ioc_rows(analysis)
+
+    with st.expander("Header Details", expanded=True):
+        auth_columns = st.columns(3)
+        for column, (label, value) in zip(
+            auth_columns,
+            [
+                ("SPF", analysis.parsed_email.spf_result),
+                ("DKIM", analysis.parsed_email.dkim_result),
+                ("DMARC", analysis.parsed_email.dmarc_result),
+            ],
+        ):
+            with column:
+                st.metric(label, value)
+        if analysis.header_findings:
+            st.dataframe(
+                [{"Finding": item.title, "Severity": item.severity, "Description": item.description} for item in analysis.header_findings],
+                width="stretch",
+                hide_index=True,
+            )
+        else:
+            st.write("No notable header findings.")
+
+    with st.expander("URL/Domain Details", expanded=True):
+        if url_rows:
+            st.dataframe(url_rows, width="stretch", hide_index=True)
+        else:
+            st.write("No suspicious URL/domain findings.")
+
+    with st.expander("Attachment Details", expanded=True):
+        if attachment_rows:
+            st.dataframe(attachment_rows, width="stretch", hide_index=True)
+        else:
+            st.write("No risky attachment metadata found.")
+
+    st.markdown("### Email IOCs")
+    st.caption("All values are fake/sample or user-provided lab values. URLs/domains/IPs are defanged for display.")
+    if ioc_rows:
+        st.dataframe(ioc_rows, width="stretch", hide_index=True)
+    else:
+        st.write("No IOCs extracted.")
+
+    with st.expander("SOC Details", expanded=False):
+        st.markdown(analysis.markdown_report)
+        st.write(f"Online enrichment: `{analysis.online_enrichment.status}`")
+
+    with st.expander("Raw Markdown Report", expanded=False):
+        st.code(analysis.markdown_report, language="markdown")
+
+
+def analyze_uploaded_email_bytes(file_name: str, file_bytes: bytes, online_enrichment_enabled: bool = False):
+    """Dashboard path for uploaded email analysis."""
+    return analyze_email_file(file_name, file_bytes, online_enrichment_enabled=online_enrichment_enabled)
+
+
+def analyze_pasted_email_text(text: str, source_type: str, online_enrichment_enabled: bool = False):
+    """Dashboard path for pasted email analysis."""
+    return analyze_pasted_email(text, source_type=source_type, online_enrichment_enabled=online_enrichment_enabled)
+
+
+def build_email_session_context(analysis) -> str:
+    """Return safe summarized email context for Copilot."""
+    return getattr(analysis, "copilot_context", "")
+
+
+def get_email_ioc_rows(analysis) -> list[dict]:
+    """Return dashboard email IOC rows."""
+    return [
+        {
+            "Type": item.type,
+            "Value": item.value,
+            "Source": item.source,
+            "Why It Matters": item.why_it_matters,
+        }
+        for item in getattr(analysis, "iocs", [])[:50]
+    ]
+
+
+def get_email_category_scores(analysis) -> dict:
+    """Return dashboard email category score mapping."""
+    return getattr(getattr(analysis, "score", None), "category_scores", {}) or {}
+
+
+def clear_email_state(clear_upload_id: bool = True) -> None:
+    """Clear dashboard email analysis state."""
+    st.session_state.pop("email_analysis", None)
+    st.session_state.pop("email_session_context", None)
+    if clear_upload_id:
+        st.session_state.pop("last_email_upload_id", None)
+    if "Uploaded email analysis summary" in st.session_state.get("copilot_session_context", ""):
+        st.session_state.pop("copilot_session_context", None)
+
+
 def render_copilot_chat() -> None:
     st.subheader("Local SecOps Copilot")
     st.write(
@@ -421,7 +764,13 @@ def render_copilot_chat() -> None:
                 st.session_state.pop("copilot_session_context", None)
                 st.rerun()
         analysis = st.session_state.get("evidence_analysis")
-        if analysis:
+        email_analysis = st.session_state.get("email_analysis")
+        if email_analysis:
+            with st.container(border=True):
+                st.markdown("**Email-aware mode active: using summarized email findings and extracted IOCs.**")
+                st.write(f"Verdict: `{email_analysis.score.verdict}`")
+                st.write(f"Risk score: `{email_analysis.score.overall_score}/100`")
+        elif analysis:
             with st.container(border=True):
                 st.markdown("**Evidence-aware mode active: using summarized uploaded evidence and extracted IOCs.**")
                 st.write(f"Evidence type: `{getattr(analysis, 'evidence_type', 'Unknown evidence')}`")
@@ -669,15 +1018,22 @@ def render_copilot_answer_card(result: dict) -> None:
 def render_copilot_metadata_cards(result: dict) -> None:
     """Render compact metadata cards above a Copilot answer."""
     analysis = st.session_state.get("evidence_analysis")
+    email_analysis = st.session_state.get("email_analysis")
     risk_scores = get_analysis_risk_scores(analysis) if analysis else []
     iocs = get_analysis_iocs(analysis) if analysis else []
-    highest_score = max([getattr(score, "score", 0) for score in risk_scores], default=0)
-    evidence_type = getattr(analysis, "evidence_type", "No uploaded evidence") if analysis else "No uploaded evidence"
+    if email_analysis:
+        highest_score = email_analysis.score.overall_score
+        evidence_type = "Email threat analysis"
+        ioc_count = len(email_analysis.iocs)
+    else:
+        highest_score = max([getattr(score, "score", 0) for score in risk_scores], default=0)
+        evidence_type = getattr(analysis, "evidence_type", "No uploaded evidence") if analysis else "No uploaded evidence"
+        ioc_count = len(iocs)
     card_values = [
         ("Detected Intent", result.get("detected_intent", "general_question")),
         ("Evidence Type", evidence_type),
         ("Highest Risk Score", highest_score),
-        ("Number of IOCs", len(iocs)),
+        ("Number of IOCs", ioc_count),
         ("Source Count", len(result.get("sources", []))),
     ]
     columns = st.columns(len(card_values))
@@ -688,6 +1044,18 @@ def render_copilot_metadata_cards(result: dict) -> None:
 
 def render_copilot_evidence_tables() -> None:
     """Render active evidence risk and IOC details alongside Copilot answers."""
+    email_analysis = st.session_state.get("email_analysis")
+    if email_analysis:
+        st.markdown("### Email Risk Scores")
+        st.dataframe(
+            [{"Category": key, "Score": value} for key, value in get_email_category_scores(email_analysis).items()],
+            width="stretch",
+            hide_index=True,
+        )
+        st.markdown("### Email IOCs")
+        st.dataframe(get_email_ioc_rows(email_analysis), width="stretch", hide_index=True)
+        return
+
     analysis = st.session_state.get("evidence_analysis")
     if not analysis:
         return

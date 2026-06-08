@@ -1,0 +1,14 @@
+From: "IT Service Desk" <it-notice@example.test>
+To: Avery User <avery.user@example.test>
+Subject: Planned maintenance reminder
+Date: Tue, 16 Jan 2026 11:00:00 +0000
+Message-ID: <sample-benign-001@example.test>
+Authentication-Results: mx.example.test; spf=pass smtp.mailfrom=example.test; dkim=pass header.d=example.test; dmarc=pass header.from=example.test
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+
+Hello,
+
+This is a fake internal maintenance reminder for the AI Security Lab.
+No action is required. The service desk will post an update after maintenance is complete.
+

@@ -1,0 +1,32 @@
+From: "Microsoft 365 Support" <alerts@security-update.example.invalid>
+Reply-To: support-review@helpdesk-example.invalid
+Return-Path: <bounce@mailer-example.invalid>
+To: Avery User <avery.user@example.test>
+Subject: Action required: Microsoft 365 password expires today
+Date: Tue, 16 Jan 2026 09:15:00 +0000
+Message-ID: <sample-phishing-001@example.invalid>
+Authentication-Results: mx.example.test; spf=fail smtp.mailfrom=security-update.example.invalid; dkim=fail header.d=example.invalid; dmarc=fail action=quarantine header.from=security-update.example.invalid
+Received: from unknown.localhost (unknown [203.0.113.88]) by mx.example.test with ESMTP id fake123
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="SAMPLE-BOUNDARY"
+
+--SAMPLE-BOUNDARY
+Content-Type: text/plain; charset="utf-8"
+
+Your Microsoft 365 password expires today. Verify your account immediately to avoid service interruption.
+Open the secure SharePoint document and sign in here:
+https://microsoft-sharepoint-login.example.invalid/reset?redirect=https%3A%2F%2Fexample.invalid%2Fcontinue&continue=sample
+
+If you do not act today, your account may be suspended.
+
+--SAMPLE-BOUNDARY
+Content-Type: text/html; charset="utf-8"
+
+<html><body><p>Action required: verify your account.</p><a href="https://microsoft-sharepoint-login.example.invalid/reset?redirect=https%3A%2F%2Fexample.invalid%2Fcontinue&continue=sample">Open secure document</a></body></html>
+
+--SAMPLE-BOUNDARY
+Content-Type: text/html; name="secure-message.html"
+Content-Disposition: attachment; filename="secure-message.html"
+
+<html><body>Fake sample attachment metadata only.</body></html>
+--SAMPLE-BOUNDARY--
