@@ -27,11 +27,19 @@ The dashboard uses this module through `dashboard/app.py` helper functions:
 
 ## Optional Online Enrichment
 
-The adapter is intentionally disabled by default:
+Online enrichment is intentionally disabled by default:
 
 ```powershell
 $env:EMAIL_ONLINE_ENRICHMENT="false"
 ```
 
-If enabled without API keys, the analyzer continues offline and reports `Online enrichment not configured`.
+Google Safe Browsing is the first supported live provider. It checks extracted URLs only. The analyzer does not send raw email body text, raw headers, attachments, or uploaded files to the provider.
 
+To enable it for local testing, set:
+
+```powershell
+$env:EMAIL_ONLINE_ENRICHMENT="true"
+$env:GOOGLE_SAFE_BROWSING_API_KEY="<your-local-key>"
+```
+
+Do not commit API keys or `.env` files. If online enrichment is enabled without `GOOGLE_SAFE_BROWSING_API_KEY`, the analyzer continues offline and reports `Online enrichment not configured`.

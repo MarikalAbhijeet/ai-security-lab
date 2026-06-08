@@ -523,6 +523,8 @@ def render_online_enrichment_snapshot(analysis) -> None:
                 st.write(status_text(provider.status, provider.threat_result))
                 st.caption(f"Score: {provider.score}")
                 st.caption(provider.note)
+                if getattr(provider, "details", "") and provider.details != provider.note:
+                    st.caption(provider.details)
 
     provider_rows = provider_result_rows(enrichment)
     st.dataframe(provider_rows, width="stretch", hide_index=True)
@@ -573,8 +575,11 @@ def render_online_enrichment_details(enrichment) -> None:
             "provider": item.provider,
             "status": item.status,
             "threat_result": item.threat_result,
+            "verdict": getattr(item, "verdict", item.threat_result),
             "score": item.score,
             "note": item.note,
+            "error": getattr(item, "error", ""),
+            "checked_at": getattr(item, "checked_at", ""),
             }
             for item in enrichment.provider_results
         ]

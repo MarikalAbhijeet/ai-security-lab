@@ -3,6 +3,7 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +62,16 @@ class EmailSummarizerTests(unittest.TestCase):
         self.assertNotIn("smtp.mailfrom", joined)
         self.assertNotIn("secure-message[.]html", joined)
         self.assertTrue(all(item["type"] in {"URL", "Domain", "IP Address", "Hash"} for item in indicators))
+
+    def test_copilot_context_includes_safe_online_enrichment_summary_only(self):
+        sample = PROJECT_ROOT / "sample-inputs" / "sample_phishing_email.eml"
+        with patch.dict("os.environ", {"GOOGLE_SAFE_BROWSING_API_KEY": ""}, clear=False):
+            analysis = analyze_email_file(sample.name, sample.read_bytes(), online_enrichment_enabled=True)
+
+        self.assertIn("Online enrichment summary:", analysis.copilot_context)
+        self.assertIn("Google Safe Browsing", analysis.copilot_context)
+        self.assertIn("Raw email body, raw headers, attachments, and files were not sent", analysis.copilot_context)
+        self.assertNotIn("Open the secure SharePoint document and sign in here", analysis.copilot_context)
 
 
 if __name__ == "__main__":

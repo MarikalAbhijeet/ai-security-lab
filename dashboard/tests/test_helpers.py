@@ -3,6 +3,7 @@
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import sys
 
@@ -175,12 +176,16 @@ class DashboardHelperTests(unittest.TestCase):
     def test_dashboard_email_enrichment_enabled_without_keys_is_not_configured(self):
         sample_path = DASHBOARD_ROOT.parent / "email_analyzer" / "sample-inputs" / "sample_phishing_email.eml"
 
-        analysis = analyze_uploaded_email_bytes(sample_path.name, sample_path.read_bytes(), online_enrichment_enabled=True)
+        with patch.dict("os.environ", {"GOOGLE_SAFE_BROWSING_API_KEY": ""}, clear=False):
+            analysis = analyze_uploaded_email_bytes(sample_path.name, sample_path.read_bytes(), online_enrichment_enabled=True)
 
         self.assertTrue(analysis.online_enrichment.enabled)
         self.assertEqual(analysis.online_enrichment.status, "Online enrichment not configured")
-        self.assertTrue(all(item.status == "Not configured" for item in analysis.online_enrichment.provider_results))
-        self.assertTrue(all(item.note == "No API key configured" for item in analysis.online_enrichment.provider_results))
+        self.assertEqual(analysis.online_enrichment.provider_results[0].provider, "Google Safe Browsing")
+        self.assertEqual(analysis.online_enrichment.provider_results[0].status, "Not configured")
+        self.assertEqual(analysis.online_enrichment.provider_results[0].note, "Missing API key")
+        self.assertTrue(all(item.status == "Not enabled" for item in analysis.online_enrichment.provider_results[1:]))
+        self.assertTrue(all(item.note != "Missing API key" for item in analysis.online_enrichment.provider_results[1:]))
 
     def test_online_enrichment_snapshot_verdicts(self):
         offline = EnrichmentResult()

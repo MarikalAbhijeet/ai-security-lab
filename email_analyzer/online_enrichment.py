@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import UTC, datetime
 from dataclasses import dataclass, field
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+
+GOOGLE_SAFE_BROWSING_ENDPOINT = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
+DEFAULT_TIMEOUT_SECONDS = 5
 
 
 @dataclass
@@ -13,11 +21,26 @@ class ProviderResult:
     provider: str
     status: str = "Offline only"
     threat_result: str = "Unknown"
+    verdict: str = "Unknown"
     score: str = "Not checked"
     note: str = "Offline / Not checked"
     indicator: str = "-"
     indicator_type: str = "-"
+    details: str = ""
+    error: str = ""
+    checked_at: str = ""
     raw_details: dict = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Keep legacy and normalized verdict fields in sync."""
+        if self.verdict == "Unknown" and self.threat_result != "Unknown":
+            self.verdict = self.threat_result
+        if self.threat_result == "Unknown" and self.verdict != "Unknown":
+            self.threat_result = self.verdict
+        if not self.details:
+            self.details = self.note
+        if not self.raw_details:
+            self.raw_details = normalized_provider_result(self)
 
 
 @dataclass
@@ -50,10 +73,11 @@ PROVIDERS = {
 def enrich_indicators(
     indicators: list[str] | list[dict],
     env: dict[str, str] | None = None,
-    timeout_seconds: int = 5,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     mock_results: list[ProviderResult] | None = None,
+    http_post=None,
 ) -> EnrichmentResult:
-    """Return disabled-by-default enrichment status without live API calls."""
+    """Return disabled-by-default enrichment status for extracted indicators only."""
     env = env or os.environ
     normalized_indicators = normalize_indicators(indicators)
     enabled = str(env.get("EMAIL_ONLINE_ENRICHMENT", "false")).lower() == "true"
@@ -63,42 +87,186 @@ def enrich_indicators(
     if mock_results is not None:
         return build_result("Mocked online enrichment results", True, mock_results, normalized_indicators)
 
-    provider_results = []
-    for provider, key_name in PROVIDERS.items():
-        if not env.get(key_name):
-            provider_results.append(
-                ProviderResult(
-                    provider=provider,
-                    status="Not configured",
-                    threat_result="Unknown",
-                    score="Not checked",
-                    note="No API key configured",
-                )
-            )
-        else:
-            provider_results.append(
-                ProviderResult(
-                    provider=provider,
-                    status="Configured",
-                    threat_result="Unknown",
-                    score="Not checked",
-                    note="Configured but live lookups are disabled in this MVP adapter",
-                )
-            )
-    if all(result.status == "Not configured" for result in provider_results):
+    provider_results = configured_provider_results(normalized_indicators, env, timeout_seconds, http_post=http_post)
+    if not any(result.status == "Checked" for result in provider_results) and any(
+        result.provider == "Google Safe Browsing" and result.status == "Not configured"
+        for result in provider_results
+    ):
         return build_result("Online enrichment not configured", True, provider_results, normalized_indicators)
-    return EnrichmentResult(
-        status="Online enrichment adapter ready, live calls disabled in MVP tests",
-        enabled=True,
-        findings=[f"{len(normalized_indicators)} extracted indicators would be enriched with strict timeouts."],
-        provider_results=provider_results,
-        total_indicators_checked=len(normalized_indicators),
-        providers_checked=len([result for result in provider_results if result.status in {"Configured", "Checked"}]),
-        urls_checked=count_type(normalized_indicators, "URL"),
-        domains_checked=count_type(normalized_indicators, "Domain"),
-        ips_checked=count_type(normalized_indicators, "IP Address"),
-        hashes_checked=count_type(normalized_indicators, "Hash"),
+    return build_result("Online enrichment completed", True, provider_results, normalized_indicators)
+
+
+def configured_provider_results(
+    indicators: list[dict],
+    env: dict[str, str],
+    timeout_seconds: int,
+    http_post=None,
+) -> list[ProviderResult]:
+    """Return Google Safe Browsing results plus non-implemented provider statuses."""
+    results = []
+    google_key = env.get("GOOGLE_SAFE_BROWSING_API_KEY", "").strip()
+    if google_key:
+        results.append(check_google_safe_browsing(indicators, google_key, timeout_seconds, http_post=http_post))
+    else:
+        results.append(missing_key_result("Google Safe Browsing"))
+
+    for provider in ("VirusTotal", "AbuseIPDB", "URLhaus", "urlscan.io"):
+        results.append(
+            ProviderResult(
+                provider=provider,
+                status="Not enabled",
+                threat_result="Not checked",
+                score="Not checked",
+                note="Provider adapter not enabled in this step.",
+                details="Provider adapter not enabled in this step.",
+            )
+        )
+    return results
+
+
+def check_google_safe_browsing(
+    indicators: list[dict],
+    api_key: str,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+    http_post=None,
+) -> ProviderResult:
+    """Check extracted URLs with Google Safe Browsing v4."""
+    url_indicators = [item for item in indicators if item.get("type") == "URL" and item.get("value")]
+    checked_at = datetime.now(UTC).isoformat(timespec="seconds")
+    if not url_indicators:
+        return ProviderResult(
+            provider="Google Safe Browsing",
+            status="Checked",
+            threat_result="Not found",
+            score="0 URLs",
+            note="No extracted URLs were available for Google Safe Browsing.",
+            indicator="-",
+            indicator_type="URL",
+            checked_at=checked_at,
+        )
+
+    payload = google_safe_browsing_payload(url_indicators)
+    endpoint = f"{GOOGLE_SAFE_BROWSING_ENDPOINT}?key={api_key}"
+    try:
+        status_code, response_text = (http_post or post_json)(endpoint, payload, timeout_seconds)
+    except TimeoutError as error:
+        return google_error_result("Error", "Provider timeout", str(error), checked_at)
+    except HTTPError as error:
+        if error.code == 429:
+            return google_error_result("Rate limited", "Rate limited", "HTTP 429 rate limited", checked_at)
+        return google_error_result("Error", "Provider error", f"HTTP {error.code}", checked_at)
+    except (URLError, OSError, ValueError) as error:
+        return google_error_result("Error", "Provider error", str(error), checked_at)
+
+    if status_code == 429:
+        return google_error_result("Rate limited", "Rate limited", "HTTP 429 rate limited", checked_at)
+    if status_code >= 400:
+        return google_error_result("Error", "Provider error", f"HTTP {status_code}", checked_at)
+
+    try:
+        data = json.loads(response_text or "{}")
+    except json.JSONDecodeError as error:
+        return google_error_result("Error", "Provider error", f"Invalid JSON response: {error}", checked_at)
+
+    matches = data.get("matches", []) or []
+    if matches:
+        first_url = display_indicator(matches[0].get("threat", {}).get("url") or url_indicators[0]["value"])
+        threat_types = sorted({str(match.get("threatType", "Unknown")) for match in matches})
+        return ProviderResult(
+            provider="Google Safe Browsing",
+            status="Checked",
+            threat_result="Threat found",
+            score=f"{len(matches)} match{'es' if len(matches) != 1 else ''}",
+            note="Provider flagged this URL.",
+            indicator=first_url,
+            indicator_type="URL",
+            details=", ".join(threat_types),
+            checked_at=checked_at,
+        )
+
+    return ProviderResult(
+        provider="Google Safe Browsing",
+        status="Checked",
+        threat_result="Clean",
+        score="0 detections",
+        note="No match found.",
+        indicator=f"{len(url_indicators)} URL(s)",
+        indicator_type="URL",
+        checked_at=checked_at,
     )
+
+
+def google_safe_browsing_payload(url_indicators: list[dict]) -> dict:
+    """Build a Safe Browsing request from original URLs only."""
+    return {
+        "client": {"clientId": "ai-security-lab", "clientVersion": "1.0"},
+        "threatInfo": {
+            "threatTypes": [
+                "MALWARE",
+                "SOCIAL_ENGINEERING",
+                "UNWANTED_SOFTWARE",
+                "POTENTIALLY_HARMFUL_APPLICATION",
+            ],
+            "platformTypes": ["ANY_PLATFORM"],
+            "threatEntryTypes": ["URL"],
+            "threatEntries": [{"url": refang(item["value"])} for item in url_indicators],
+        },
+    }
+
+
+def post_json(url: str, payload: dict, timeout_seconds: int) -> tuple[int, str]:
+    """Post JSON with a strict timeout."""
+    request = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout_seconds) as response:
+        body = response.read().decode("utf-8")
+        return int(getattr(response, "status", 200)), body
+
+
+def google_error_result(status: str, note: str, error: str, checked_at: str) -> ProviderResult:
+    """Return normalized Google Safe Browsing error state."""
+    return ProviderResult(
+        provider="Google Safe Browsing",
+        status=status,
+        threat_result="Unknown",
+        score="Not checked",
+        note=note,
+        indicator="-",
+        indicator_type="URL",
+        error=error,
+        checked_at=checked_at,
+    )
+
+
+def missing_key_result(provider: str) -> ProviderResult:
+    """Return normalized missing API key state."""
+    return ProviderResult(
+        provider=provider,
+        status="Not configured",
+        threat_result="Unknown",
+        score="Not checked",
+        note="Missing API key",
+        details="No API key configured",
+    )
+
+
+def normalized_provider_result(result: ProviderResult) -> dict:
+    """Return a dashboard-safe normalized provider result."""
+    return {
+        "provider": result.provider,
+        "indicator": result.indicator,
+        "indicator_type": result.indicator_type,
+        "status": result.status,
+        "verdict": result.threat_result,
+        "score": result.score,
+        "details": result.details,
+        "error": result.error,
+        "checked_at": result.checked_at,
+    }
 
 
 def offline_provider_results() -> list[ProviderResult]:
@@ -110,18 +278,19 @@ def build_result(status: str, enabled: bool, provider_results: list[ProviderResu
     """Build enrichment result summary metrics."""
     threats = [result for result in provider_results if result.threat_result == "Threat found"]
     checked = [result for result in provider_results if result.status == "Checked"]
+    checked_urls = checked_url_count(provider_results) or (count_type(indicators, "URL") if checked else 0)
     return EnrichmentResult(
         status=status,
         enabled=enabled,
         findings=[result.note for result in provider_results if result.note],
         provider_results=provider_results,
-        total_indicators_checked=len(indicators) if checked else 0,
+        total_indicators_checked=checked_urls,
         total_threats_found=len(threats),
         highest_provider_score=highest_score(provider_results),
-        urls_checked=count_type(indicators, "URL") if checked else 0,
-        domains_checked=count_type(indicators, "Domain") if checked else 0,
-        ips_checked=count_type(indicators, "IP Address") if checked else 0,
-        hashes_checked=count_type(indicators, "Hash") if checked else 0,
+        urls_checked=checked_urls,
+        domains_checked=0,
+        ips_checked=0,
+        hashes_checked=0,
         providers_checked=len(checked),
     )
 
@@ -141,6 +310,14 @@ def normalize_indicators(indicators: list[str] | list[dict]) -> list[dict]:
     return normalized
 
 
+def checked_url_count(provider_results: list[ProviderResult]) -> int:
+    """Return the number of URLs checked by Google Safe Browsing."""
+    for result in provider_results:
+        if result.provider == "Google Safe Browsing" and result.status == "Checked":
+            return int(result.raw_details.get("urls_checked", 0))
+    return 0
+
+
 def count_type(indicators: list[dict], indicator_type: str) -> int:
     """Count indicators by type."""
     return len([item for item in indicators if item.get("type") == indicator_type])
@@ -152,3 +329,19 @@ def highest_score(provider_results: list[ProviderResult]) -> str:
     if not scores:
         return "Not checked"
     return scores[0]
+
+
+def refang(value: str) -> str:
+    """Convert display-safe URL back to original form for provider API requests."""
+    return (
+        str(value)
+        .replace("hxxps://", "https://")
+        .replace("hxxp://", "http://")
+        .replace("[.]", ".")
+    )
+
+
+def display_indicator(value: str) -> str:
+    """Defang URL/domain-like values for display."""
+    display = str(value or "-")
+    return display.replace("https://", "hxxps://").replace("http://", "hxxp://").replace(".", "[.]")

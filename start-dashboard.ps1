@@ -16,6 +16,9 @@ $env:OLLAMA_MODEL = "qwen2.5:3b"
 $env:OLLAMA_TIMEOUT_SECONDS = "180"
 $env:OLLAMA_HEALTH_TIMEOUT_SECONDS = "10"
 $env:COPILOT_TEST_MODE = "false"
+if ([string]::IsNullOrWhiteSpace($env:EMAIL_ONLINE_ENRICHMENT)) {
+    $env:EMAIL_ONLINE_ENRICHMENT = "false"
+}
 
 $OllamaTagsUrl = "$($env:OLLAMA_BASE_URL)/api/tags"
 $OllamaGenerateUrl = "$($env:OLLAMA_BASE_URL)/api/generate"
@@ -49,12 +52,52 @@ function Get-OllamaCommand {
     return $null
 }
 
+function Get-PythonCommand {
+    $LocalAppDataCandidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        $LocalAppDataCandidates += $env:LOCALAPPDATA
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        $LocalAppDataCandidates += (Join-Path $env:USERPROFILE "AppData\Local")
+    }
+    if (-not [string]::IsNullOrWhiteSpace($HOME)) {
+        $LocalAppDataCandidates += (Join-Path $HOME "AppData\Local")
+    }
+
+    foreach ($LocalAppDataPath in ($LocalAppDataCandidates | Select-Object -Unique)) {
+        $UserPythonRoot = Join-Path $LocalAppDataPath "Programs\Python"
+        foreach ($Version in @("Python314", "Python313", "Python312", "Python311", "Python310", "Python39")) {
+            $VersionPython = Join-Path (Join-Path $UserPythonRoot $Version) "python.exe"
+            if (Test-Path -LiteralPath $VersionPython) {
+                return $VersionPython
+            }
+        }
+
+        if (Test-Path -LiteralPath $UserPythonRoot) {
+            $UserPython = Get-ChildItem -Path $UserPythonRoot -Recurse -Filter "python.exe" -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending |
+                Select-Object -First 1
+            if ($UserPython) {
+                return $UserPython.FullName
+            }
+        }
+    }
+
+    $PathCommand = Get-Command "python" -ErrorAction SilentlyContinue
+    if ($PathCommand) {
+        return $PathCommand.Source
+    }
+
+    return $null
+}
+
 Write-Step "Repository root: $RepoRoot"
 Write-Step "Using local Security Copilot provider: $env:COPILOT_PROVIDER"
 Write-Step "Using Ollama base URL: $env:OLLAMA_BASE_URL"
 Write-Step "Using Ollama model: $env:OLLAMA_MODEL"
 Write-Step "Using Ollama generation timeout: $env:OLLAMA_TIMEOUT_SECONDS seconds"
 Write-Step "Using Ollama health timeout: $env:OLLAMA_HEALTH_TIMEOUT_SECONDS seconds"
+Write-Step "Email online enrichment enabled: $env:EMAIL_ONLINE_ENRICHMENT"
 
 $OllamaCommand = Get-OllamaCommand
 
@@ -74,13 +117,18 @@ $OllamaReady = Test-OllamaReachable
 
 if ($OllamaReady -and $OllamaCommand) {
     Write-Step "Ollama is reachable. Checking for model $env:OLLAMA_MODEL..."
-    $ModelList = (& $OllamaCommand list 2>$null) -join "`n"
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Could not read Ollama model list. The dashboard will still start and show setup guidance if needed."
+    try {
+        $ModelList = (& $OllamaCommand list 2>$null) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Could not read Ollama model list. The dashboard will still start and show setup guidance if needed."
+        }
+        elseif ($ModelList -notmatch [regex]::Escape($env:OLLAMA_MODEL)) {
+            Write-Step "Model $env:OLLAMA_MODEL not found. Pulling model locally..."
+            & $OllamaCommand pull $env:OLLAMA_MODEL
+        }
     }
-    elseif ($ModelList -notmatch [regex]::Escape($env:OLLAMA_MODEL)) {
-        Write-Step "Model $env:OLLAMA_MODEL not found. Pulling model locally..."
-        & $OllamaCommand pull $env:OLLAMA_MODEL
+    catch {
+        Write-Warning "Could not read Ollama model list. The dashboard will still start and show setup guidance if needed."
     }
 
     Write-Step "Preloading model $env:OLLAMA_MODEL..."
@@ -104,9 +152,10 @@ else {
 
 Write-Step "Starting Streamlit dashboard..."
 
-$PythonCommand = Get-Command "python" -ErrorAction SilentlyContinue
+$PythonCommand = Get-PythonCommand
 if ($PythonCommand) {
-    & $PythonCommand.Source -m streamlit run .\dashboard\app.py
+    Write-Step "Using Python executable: $PythonCommand"
+    & $PythonCommand -m streamlit run .\dashboard\app.py
 }
 else {
     Write-Step "python was not found on PATH. Trying py -3 instead..."

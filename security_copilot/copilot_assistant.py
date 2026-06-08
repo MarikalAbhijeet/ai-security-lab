@@ -463,9 +463,11 @@ def render_email_focused_answer(session_context: str, question: str, detected_in
     iocs = extract_named_section_lines(session_context, "IOCs / Investigation Artifacts Observed:")
     user_guidance = extract_named_section_lines(session_context, "Recommended user guidance:")
     soc_actions = extract_named_section_lines(session_context, "Recommended SOC actions:")
+    enrichment_lines = extract_named_section_lines(session_context, "Online enrichment summary:")
     kql_topics = extract_named_section_lines(session_context, "Recommended KQL topics:")
     verdict = metadata.get("verdict", "Needs Review")
     risk_score = metadata.get("risk score", "Unknown")
+    question_lower = question.lower()
 
     if detected_intent == "kql_recommendation":
         return render_kql_answer(session_context, kql_topics, iocs, question)
@@ -479,11 +481,26 @@ def render_email_focused_answer(session_context: str, question: str, detected_in
                 f"**Summary:** {'; '.join(reason.removeprefix('- ') for reason in reasons[:4]) or 'Local email analysis requires review.'}",
                 f"**User Guidance:** {' '.join(line.removeprefix('- ') for line in user_guidance[:2])}",
                 f"**SOC Action:** {' '.join(action.removeprefix('- ') for action in soc_actions[:3])}",
+                f"**Google Safe Browsing:** {single_line_enrichment_summary(enrichment_lines)}",
                 "**Safety:** Raw email content was not sent to Ollama; this ticket is based on summarized local findings and defanged IOCs.",
             ]
         )
     if detected_intent == "ioc_listing":
         return render_ioc_answer(iocs, session_context)
+    if "google safe browsing" in question_lower or "provider" in question_lower or "online enrichment" in question_lower:
+        return "\n\n".join(
+            [
+                "## Local Email Analysis",
+                f"- Verdict: {verdict}",
+                f"- Risk Score: {risk_score}/100",
+                "\n".join(reasons[:4]) if reasons else "- No strong local phishing indicators were found.",
+                "## Google Safe Browsing Enrichment",
+                "\n".join(enrichment_lines) if enrichment_lines else "- No Google Safe Browsing enrichment summary is active.",
+                "## Safety Boundary",
+                "- Only extracted URL indicators are eligible for Google Safe Browsing checks.",
+                "- Raw email body, raw headers, attachments, and uploaded files are not sent to online providers.",
+            ]
+        )
 
     return "\n\n".join(
         [
@@ -496,12 +513,23 @@ def render_email_focused_answer(session_context: str, question: str, detected_in
             "\n".join(reasons[:6]) if reasons else "- The local email analyzer did not find enough high-confidence indicators.",
             "## Email IOCs / Investigation Artifacts",
             "\n".join(iocs[:15]) if iocs else "- No email IOCs were extracted.",
+            "## Google Safe Browsing Enrichment",
+            "\n".join(enrichment_lines) if enrichment_lines else "- Online enrichment was not enabled or no provider summary is active.",
             "## SOC Details",
             "\n".join(format_bullets_with_label(soc_actions[:6], "Recommended Action")) if soc_actions else "- **Recommended Action:** Review sender, authentication, URLs, attachments, and mailbox scope.",
             "## Human Review Warning",
             "This is a local lab result from summarized email analysis only. Validate before taking operational action.",
         ]
     )
+
+
+def single_line_enrichment_summary(enrichment_lines: list[str]) -> str:
+    """Return a compact enrichment summary for ticket answers."""
+    google_lines = [line.removeprefix("- ").strip() for line in enrichment_lines if "Google Safe Browsing" in line]
+    if google_lines:
+        return " ".join(google_lines[:2])
+    status_lines = [line.removeprefix("- ").strip() for line in enrichment_lines if line.strip()]
+    return " ".join(status_lines[:2]) if status_lines else "No online enrichment summary was active."
 
 
 def first_guidance(lines: list[str], fallback: str) -> str:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from email.utils import parseaddr
 
@@ -61,7 +62,8 @@ def analyze_parsed_email(parsed: ParsedEmail, online_enrichment_enabled: bool = 
     body_findings = analyze_body(parsed)
     score = calculate_score(header_findings, url_findings, attachment_findings, body_findings)
     iocs = build_iocs(parsed)
-    enrichment_env = {"EMAIL_ONLINE_ENRICHMENT": "true"} if online_enrichment_enabled else {"EMAIL_ONLINE_ENRICHMENT": "false"}
+    enrichment_env = dict(os.environ)
+    enrichment_env["EMAIL_ONLINE_ENRICHMENT"] = "true" if online_enrichment_enabled else "false"
     enrichment = enrich_indicators(enrichment_indicators(iocs), env=enrichment_env)
     analysis = EmailAnalysis(
         parsed_email=parsed,
@@ -170,6 +172,8 @@ def render_copilot_context(analysis: EmailAnalysis) -> str:
     lines.append(f"- Do not: {analysis.user_do_not}")
     lines.append("Recommended SOC actions:")
     lines.extend(f"- {action}" for action in recommended_soc_actions(analysis)[:6])
+    lines.append("Online enrichment summary:")
+    lines.extend(online_enrichment_context_lines(analysis.online_enrichment))
     lines.append("Recommended KQL topics:")
     lines.append("- phishing investigation")
     lines.append("- sender, URL, attachment, and recipient pivots")
@@ -177,6 +181,30 @@ def render_copilot_context(analysis: EmailAnalysis) -> str:
     lines.append(build_ticket_note(analysis))
     lines.append("Raw email content was not included in this summary.")
     return "\n".join(lines)
+
+
+def online_enrichment_context_lines(enrichment: EnrichmentResult) -> list[str]:
+    """Return safe provider summary lines for Copilot context."""
+    lines = [
+        f"- Status: {enrichment.status}",
+        f"- URLs checked: {enrichment.urls_checked}",
+        f"- Threats found: {enrichment.total_threats_found}",
+        f"- Providers checked: {enrichment.providers_checked}",
+    ]
+    for result in enrichment.provider_results:
+        if result.provider != "Google Safe Browsing":
+            continue
+        lines.append(
+            "- Google Safe Browsing: "
+            f"status={result.status}; verdict={result.threat_result}; "
+            f"score={result.score}; indicator={result.indicator}; note={result.note}"
+        )
+        if result.details:
+            lines.append(f"- Google Safe Browsing details: {result.details}")
+        if result.error:
+            lines.append(f"- Google Safe Browsing error: {result.error}")
+    lines.append("- Raw email body, raw headers, attachments, and files were not sent to online providers.")
+    return lines
 
 
 def plain_reason(analysis: EmailAnalysis) -> str:
